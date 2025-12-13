@@ -7,6 +7,10 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
+  # Windows and macOS builds disabled for v1.0.0 - GTK3 bundling requires additional work
+  # build-windows:
+  # build-macos:
+
   build-linux:
     runs-on: ubuntu-latest
     steps:
@@ -82,107 +86,51 @@ jobs:
           name: ivory-linux
           path: ivory_*.deb
 
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v3
+  # build-windows:
+  #   runs-on: windows-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.10'
+  #     - name: Install GTK3 dependencies
+  #       run: |
+  #         # TODO: Fix pkg-config issues with MSYS2
+  #         # pip install pyinstaller mido python-rtmidi PyGObject
+  #     - name: Build executable
+  #       run: |
+  #         # pyinstaller --onefile --windowed --name ivory ivory.py
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ivory-windows
+  #         path: dist/ivory.exe
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install MSYS2 and GTK3
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-gtk3
-            mingw-w64-x86_64-python-gobject
-            mingw-w64-x86_64-python-cairo
-
-      - name: Install Python dependencies
-        run: |
-          pip install pyinstaller mido python-rtmidi
-        shell: pwsh
-
-      - name: Install PyGObject
-        run: |
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
-          pip install pycairo PyGObject
-        shell: pwsh
-
-      - name: Build executable
-        run: |
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
-          pyinstaller --onefile --windowed --name ivory --icon icons/ivory.png --collect-all gi --collect-all cairo --add-binary "C:\msys64\mingw64\bin\*.dll;." ivory.py
-        shell: pwsh
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ivory-windows
-          path: dist/ivory.exe
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          brew install gtk+3 pygobject3
-          pip install mido python-rtmidi py2app
-
-      - name: Build .app
-        run: |
-          cat > setup.py << EOF
-          from setuptools import setup
-
-          APP = ['ivory.py']
-          DATA_FILES = [('', ['chord_detector.py'])]
-          OPTIONS = {
-              'argv_emulation': True,
-              'packages': ['gi', 'cairo', 'mido'],
-              'iconfile': 'icons/ivory.png',
-              'plist': {
-                  'CFBundleName': 'Ivory',
-                  'CFBundleDisplayName': 'Ivory',
-                  'CFBundleGetInfoString': "Professional MIDI Keyboard Monitor",
-                  'CFBundleIdentifier': "com.github.ganten7.ivory",
-                  'CFBundleVersion': "1.0.0",
-                  'CFBundleShortVersionString': "1.0.0",
-                  'NSHumanReadableCopyright': "Copyright © 2025 Ganten, MIT License"
-              }
-          }
-
-          setup(
-              app=APP,
-              data_files=DATA_FILES,
-              options={'py2app': OPTIONS},
-              setup_requires=['py2app'],
-          )
-          EOF
-
-          python setup.py py2app
-
-          # Create DMG
-          hdiutil create -volname Ivory -srcfolder dist/ivory.app -ov -format UDZO Ivory.dmg
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ivory-macos
-          path: Ivory.dmg
+  # build-macos:
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v4
+  #       with:
+  #         python-version: '3.10'
+  #     - name: Install dependencies
+  #       run: |
+  #         # TODO: Fix GTK3 bundling for macOS
+  #         # brew install gtk+3 pygobject3
+  #         # pip install mido python-rtmidi py2app
+  #     - name: Build .app
+  #       run: |
+  #         # py2app build here
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: ivory-macos
+  #         path: Ivory.dmg
 
   release:
-    needs: [build-linux, build-windows, build-macos]
+    needs: [build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -196,8 +144,6 @@ jobs:
         with:
           files: |
             ivory-linux/*.deb
-            ivory-windows/ivory.exe
-            ivory-macos/Ivory.dmg
           generate_release_notes: true
           draft: false
           prerelease: false
