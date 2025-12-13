@@ -92,13 +92,32 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install MSYS2 and GTK3
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gtk3
+            mingw-w64-x86_64-python-gobject
+            mingw-w64-x86_64-python-cairo
+
+      - name: Install Python dependencies
         run: |
-          pip install PyGObject pyinstaller mido python-rtmidi
+          pip install pyinstaller mido python-rtmidi
+        shell: pwsh
+
+      - name: Install PyGObject
+        run: |
+          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          pip install pycairo PyGObject
+        shell: pwsh
 
       - name: Build executable
         run: |
-          pyinstaller --onefile --windowed --name ivory --icon icons/ivory.png ivory.py
+          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          pyinstaller --onefile --windowed --name ivory --icon icons/ivory.png --collect-all gi --collect-all cairo --add-binary "C:\msys64\mingw64\bin\*.dll;." ivory.py
+        shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
