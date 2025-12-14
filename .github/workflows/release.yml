@@ -102,14 +102,23 @@ jobs:
       - name: Build executable with PyInstaller
         shell: pwsh
         run: |
-          pyinstaller --onefile --windowed --name ivory `
-            --add-data "chord_detector.py;." `
+          python -m PyInstaller --onefile --windowed --name ivory `
             --hidden-import chord_detector `
+            --collect-submodules chord_detector `
             --hidden-import PyQt5.QtCore `
             --hidden-import PyQt5.QtGui `
             --hidden-import PyQt5.QtWidgets `
+            --hidden-import PyQt5.QtWidgets.QApplication `
+            --collect-all PyQt5 `
             --hidden-import mido `
             --hidden-import rtmidi `
+            --collect-all mido `
+            --collect-all rtmidi `
+            --exclude-module tkinter `
+            --exclude-module matplotlib `
+            --exclude-module numpy `
+            --exclude-module scipy `
+            --exclude-module pandas `
             ivory.py
           
           if ($LASTEXITCODE -ne 0) {
@@ -128,6 +137,10 @@ jobs:
             Get-ChildItem "dist/" | Select-Object Name
             exit 1
           }
+          
+          # Verify it's a valid PE executable (not Node.js)
+          Write-Host "Verifying executable..."
+          file dist/ivory.exe || Get-Item dist/ivory.exe | Select-Object Length, LastWriteTime
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -153,14 +166,21 @@ jobs:
       - name: Build .app bundle
         run: |
           # PyInstaller with --windowed creates .app bundle automatically
-          pyinstaller --onedir --windowed --name Ivory \
-            --add-data "chord_detector.py:." \
+          python -m PyInstaller --onedir --windowed --name Ivory \
             --hidden-import chord_detector \
+            --collect-submodules chord_detector \
             --hidden-import PyQt5.QtCore \
             --hidden-import PyQt5.QtGui \
             --hidden-import PyQt5.QtWidgets \
+            --hidden-import PyQt5.QtWidgets.QApplication \
+            --collect-all PyQt5 \
             --hidden-import mido \
             --hidden-import rtmidi \
+            --collect-all mido \
+            --collect-all rtmidi \
+            --exclude-module tkinter \
+            --exclude-module matplotlib \
+            --exclude-module numpy \
             ivory.py || {
             echo "PyInstaller failed, checking output..."
             ls -la dist/ || true
@@ -171,6 +191,8 @@ jobs:
           # Move the .app bundle to current directory
           if [ -d "dist/Ivory.app" ]; then
             mv dist/Ivory.app .
+            # Remove quarantine attribute (helps with Gatekeeper)
+            xattr -cr Ivory.app || true
           else
             echo "Error: Ivory.app not found in dist/"
             echo "Contents of dist/:"
