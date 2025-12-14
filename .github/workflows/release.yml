@@ -262,8 +262,24 @@ jobs:
               fi
               
               # Try to get executable info (won't run it, just check it exists)
+              echo "=== Executable file info ==="
               file "$EXECUTABLE" || true
-              otool -L "$EXECUTABLE" | head -20 || true
+              echo ""
+              echo "=== Executable linked libraries (first 30) ==="
+              otool -L "$EXECUTABLE" | head -30 || true
+              echo ""
+              
+              # Check if PyQt5 frameworks are linked
+              if otool -L "$EXECUTABLE" | grep -q "PyQt5\|Qt"; then
+                echo "✓ PyQt5/Qt libraries found in executable"
+              else
+                echo "WARNING: No PyQt5/Qt libraries found in executable!"
+              fi
+              
+              # List all files in MacOS directory
+              echo ""
+              echo "=== Contents of MacOS directory ==="
+              ls -la Ivory.app/Contents/MacOS/ || true
             else
               echo "ERROR: Executable is not executable!"
               exit 1
