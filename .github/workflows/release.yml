@@ -172,6 +172,7 @@ jobs:
         run: |
           # PyInstaller with --windowed creates .app bundle automatically
           # Use targeted imports - PyInstaller auto-detects frameworks for hidden imports
+          # Exclude optional Qt frameworks that cause symlink conflicts
           python -m PyInstaller --onedir --windowed --name Ivory \
             --icon=icons/ivory.png \
             --add-data "icons:icons" \
@@ -187,6 +188,17 @@ jobs:
             --exclude-module numpy \
             --exclude-module scipy \
             --exclude-module pandas \
+            --exclude-module PyQt5.QtBluetooth \
+            --exclude-module PyQt5.QtNfc \
+            --exclude-module PyQt5.QtWebSockets \
+            --exclude-module PyQt5.QtWebEngine \
+            --exclude-module PyQt5.QtWebEngineWidgets \
+            --exclude-module PyQt5.QtQuick \
+            --exclude-module PyQt5.QtQml \
+            --exclude-module PyQt5.Qt3D \
+            --exclude-module PyQt5.QtGamepad \
+            --exclude-module PyQt5.QtLocation \
+            --exclude-module PyQt5.QtPositioning \
             ivory.py 2>&1 | tee pyinstaller.log || {
             echo "PyInstaller failed, checking output..."
             echo "=== PyInstaller log ==="
