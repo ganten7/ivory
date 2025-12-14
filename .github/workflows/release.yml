@@ -100,18 +100,32 @@ jobs:
           pip install pyinstaller
 
       - name: Build executable with PyInstaller
+        shell: pwsh
         run: |
-          pyinstaller --onefile --windowed --name ivory \
-            --add-data "chord_detector.py;." \
-            --hidden-import chord_detector \
-            --hidden-import PyQt5.QtCore \
-            --hidden-import PyQt5.QtGui \
-            --hidden-import PyQt5.QtWidgets \
-            --hidden-import mido \
-            --hidden-import rtmidi \
-            ivory.py || {
-            echo "PyInstaller failed, checking output..."
-            cat build/ivory/warn-ivory.txt || true
+          pyinstaller --onefile --windowed --name ivory `
+            --add-data "chord_detector.py;." `
+            --hidden-import chord_detector `
+            --hidden-import PyQt5.QtCore `
+            --hidden-import PyQt5.QtGui `
+            --hidden-import PyQt5.QtWidgets `
+            --hidden-import mido `
+            --hidden-import rtmidi `
+            ivory.py
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "PyInstaller failed, checking output..."
+            if (Test-Path "build/ivory/warn-ivory.txt") {
+              Get-Content "build/ivory/warn-ivory.txt"
+            }
+            if (Test-Path "build/ivory") {
+              Get-ChildItem "build/ivory" -Recurse | Select-Object FullName
+            }
+            exit 1
+          }
+          
+          if (-not (Test-Path "dist/ivory.exe")) {
+            Write-Host "Error: ivory.exe not found in dist/"
+            Get-ChildItem "dist/" | Select-Object Name
             exit 1
           }
 
