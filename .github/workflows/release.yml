@@ -166,25 +166,31 @@ jobs:
       - name: Build .app bundle
         run: |
           # PyInstaller with --windowed creates .app bundle automatically
+          # Use simpler approach - let PyInstaller auto-detect most dependencies
           python -m PyInstaller --onedir --windowed --name Ivory \
             --hidden-import chord_detector \
-            --collect-submodules chord_detector \
             --hidden-import PyQt5.QtCore \
             --hidden-import PyQt5.QtGui \
             --hidden-import PyQt5.QtWidgets \
-            --hidden-import PyQt5.QtWidgets.QApplication \
-            --collect-all PyQt5 \
             --hidden-import mido \
             --hidden-import rtmidi \
-            --collect-all mido \
-            --collect-all rtmidi \
             --exclude-module tkinter \
             --exclude-module matplotlib \
             --exclude-module numpy \
-            ivory.py || {
+            --exclude-module scipy \
+            --exclude-module pandas \
+            ivory.py 2>&1 | tee pyinstaller.log || {
             echo "PyInstaller failed, checking output..."
+            echo "=== PyInstaller log ==="
+            tail -100 pyinstaller.log || true
+            echo "=== Build directory ==="
+            ls -la build/ || true
+            if [ -d "build/Ivory" ]; then
+              echo "=== Build warnings ==="
+              cat build/Ivory/warn-Ivory.txt || true
+            fi
+            echo "=== Dist directory ==="
             ls -la dist/ || true
-            cat build/Ivory/warn-Ivory.txt || true
             exit 1
           }
           
@@ -193,6 +199,7 @@ jobs:
             mv dist/Ivory.app .
             # Remove quarantine attribute (helps with Gatekeeper)
             xattr -cr Ivory.app || true
+            echo "✓ Ivory.app created successfully"
           else
             echo "Error: Ivory.app not found in dist/"
             echo "Contents of dist/:"
