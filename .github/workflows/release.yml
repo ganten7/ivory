@@ -101,7 +101,7 @@ jobs:
 
       - name: Build executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name ivory --icon=icons/ivory.png --add-data "chord_detector.py;." ivory.py
+          pyinstaller --onefile --windowed --name ivory --add-data "chord_detector.py;." --hidden-import PyQt5.QtCore --hidden-import PyQt5.QtGui --hidden-import PyQt5.QtWidgets --hidden-import PyQt5.QtWidgets.QApplication ivory.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -126,38 +126,17 @@ jobs:
 
       - name: Build .app bundle
         run: |
-          pyinstaller --onefile --windowed --name Ivory --icon=icons/ivory.png --add-data "chord_detector.py:." ivory.py
-          # Create .app bundle structure
-          mkdir -p Ivory.app/Contents/MacOS
-          mkdir -p Ivory.app/Contents/Resources
-          cp dist/Ivory Ivory.app/Contents/MacOS/
-          cp icons/ivory.png Ivory.app/Contents/Resources/
+          # PyInstaller with --windowed creates .app bundle automatically
+          pyinstaller --onedir --windowed --name Ivory --add-data "chord_detector.py:." --hidden-import PyQt5.QtCore --hidden-import PyQt5.QtGui --hidden-import PyQt5.QtWidgets ivory.py
           
-          # Create Info.plist
-          cat > Ivory.app/Contents/Info.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleExecutable</key>
-            <string>Ivory</string>
-            <key>CFBundleIconFile</key>
-            <string>ivory.png</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.github.ganten7.ivory</string>
-            <key>CFBundleName</key>
-            <string>Ivory</string>
-            <key>CFBundleVersion</key>
-            <string>1.0.0</string>
-            <key>CFBundleShortVersionString</key>
-            <string>1.0.0</string>
-            <key>LSMinimumSystemVersion</key>
-            <string>10.13</string>
-            <key>NSHighResolutionCapable</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
+          # Move the .app bundle to current directory
+          if [ -d "dist/Ivory.app" ]; then
+            mv dist/Ivory.app .
+          else
+            echo "Error: Ivory.app not found in dist/"
+            ls -la dist/
+            exit 1
+          fi
 
       - name: Create DMG
         run: |
