@@ -209,16 +209,24 @@ jobs:
             exit 1
           fi
 
-      - name: Create DMG
+      - name: Create ZIP archive
         run: |
-          # Create DMG using hdiutil
-          hdiutil create -volname "Ivory" -srcfolder Ivory.app -ov -format UDZO Ivory.dmg
+          # Create ZIP file - simpler than DMG, no mounting needed
+          zip -r Ivory.zip Ivory.app
+          echo "✓ Created Ivory.zip"
+
+      - name: Create DMG (optional, for users who prefer DMG)
+        run: |
+          # Also create DMG for users who prefer it
+          hdiutil create -volname "Ivory" -srcfolder Ivory.app -ov -format UDZO Ivory.dmg || echo "DMG creation failed, continuing with ZIP only"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ivory-macos
-          path: Ivory.dmg
+          path: |
+            Ivory.zip
+            Ivory.dmg
 
   release:
     needs: [build-linux, build-windows, build-macos]
@@ -257,6 +265,7 @@ jobs:
           files: |
             ivory-linux/*.deb
             ivory-windows/*.exe
+            ivory-macos/*.zip
             ivory-macos/*.dmg
           generate_release_notes: true
           draft: false

@@ -16,33 +16,37 @@ If you encounter a "JavaScript error" or "Node.js error" when running `ivory.exe
 
 ## macOS Installation
 
+### Installation (ZIP - Recommended)
+
+1. **Download** `Ivory.zip` from the releases page
+2. **Double-click** `Ivory.zip` to extract it (or right-click → "Open With" → "Archive Utility")
+3. **Drag** `Ivory.app` to your `/Applications` folder
+4. **First launch**: Right-click `Ivory.app` → "Open" (to bypass Gatekeeper)
+5. When prompted, click **"Open"** again
+
+### Installation (DMG - Alternative)
+
+1. **Download** `Ivory.dmg` from the releases page
+2. **Double-click** `Ivory.dmg` to mount it
+3. **Drag** `Ivory.app` to the Applications folder shortcut in the DMG window
+4. **Eject** the DMG (drag to Trash or right-click → Eject)
+5. **First launch**: Right-click `Ivory.app` → "Open" (to bypass Gatekeeper)
+
 ### Gatekeeper Warning
 
-macOS may block the application because it's not signed. To open it:
+macOS may block the application because it's not signed. If you get a "damaged" or "can't be opened" error:
 
-1. **Right-click** (or Control-click) the `Ivory.dmg` file
-2. Select **"Open"** from the context menu
-3. When prompted, click **"Open"** again
+**Option 1 (Easiest):**
+- Right-click `Ivory.app` → "Open"
+- Click "Open" when prompted
 
-### Alternative: Remove Quarantine Attribute
-
-If the above doesn't work, open Terminal and run:
-
+**Option 2 (Terminal):**
 ```bash
-# Navigate to where you downloaded Ivory.dmg
-cd ~/Downloads
-
-# Mount the DMG
-hdiutil attach Ivory.dmg
-
 # Remove quarantine attribute
-xattr -cr /Volumes/Ivory/Ivory.app
+xattr -cr ~/Downloads/Ivory.app
 
-# Copy to Applications
-cp -R /Volumes/Ivory/Ivory.app /Applications/
-
-# Unmount
-hdiutil detach /Volumes/Ivory
+# Or if already in Applications
+sudo xattr -rd com.apple.quarantine /Applications/Ivory.app
 ```
 
 ### Run from Source (Recommended for Testing)
