@@ -170,11 +170,22 @@ jobs:
 
       - name: Build .app bundle
         run: |
+          # Clean any previous builds to avoid symlink conflicts
+          rm -rf build/Ivory dist/Ivory Ivory.app 2>/dev/null || true
+          
+          # Create hooks directory for PyInstaller
+          mkdir -p hooks
+          # Copy hook file if it exists
+          if [ -f "hook-PyQt5.QtBluetooth.py" ]; then
+            cp hook-PyQt5.QtBluetooth.py hooks/
+          fi
+          
           # PyInstaller with --windowed creates .app bundle automatically
+          # Skip icon for now (requires PIL/Pillow and can cause issues)
           # Use targeted imports - PyInstaller auto-detects frameworks for hidden imports
-          # Exclude optional Qt frameworks that cause symlink conflicts
+          # Use --additional-hooks-dir to use our custom hook
           python -m PyInstaller --onedir --windowed --name Ivory \
-            --icon=icons/ivory.png \
+            --additional-hooks-dir=hooks \
             --add-data "icons:icons" \
             --hidden-import chord_detector \
             --hidden-import PyQt5.QtCore \
@@ -199,19 +210,80 @@ jobs:
             --exclude-module PyQt5.QtGamepad \
             --exclude-module PyQt5.QtLocation \
             --exclude-module PyQt5.QtPositioning \
+            --noconfirm \
             ivory.py 2>&1 | tee pyinstaller.log || {
-            echo "PyInstaller failed, checking output..."
-            echo "=== PyInstaller log ==="
-            tail -100 pyinstaller.log || true
-            echo "=== Build directory ==="
-            ls -la build/ || true
-            if [ -d "build/Ivory" ]; then
-              echo "=== Build warnings ==="
-              cat build/Ivory/warn-Ivory.txt || true
+            # Check if it's the QtBluetooth symlink conflict
+            if grep -q "FileExistsError.*QtBluetooth\|File exists.*Versions/Current/Resources" pyinstaller.log; then
+              echo "QtBluetooth framework symlink conflict - attempting workaround..."
+              # Remove problematic frameworks before they cause issues
+              find dist/Ivory -name "QtBluetooth.framework" -type d -exec rm -rf {} + 2>/dev/null || true
+              find dist/Ivory -name "QtNfc.framework" -type d -exec rm -rf {} + 2>/dev/null || true
+              find dist/Ivory -name "QtWebEngine*.framework" -type d -exec rm -rf {} + 2>/dev/null || true
+              # If we have dist/Ivory, try to manually complete the .app bundle
+              if [ -d "dist/Ivory" ] && [ -f "dist/Ivory/Ivory" ]; then
+                echo "Found dist/Ivory with executable, attempting manual .app bundle creation..."
+                # Create .app structure manually
+                mkdir -p dist/Ivory.app/Contents/MacOS
+                mkdir -p dist/Ivory.app/Contents/Frameworks
+                mkdir -p dist/Ivory.app/Contents/Resources
+                # Copy executable
+                cp dist/Ivory/Ivory dist/Ivory.app/Contents/MacOS/
+                # Copy _internal directory (contains Python and libraries)
+                if [ -d "dist/Ivory/_internal" ]; then
+                  cp -r dist/Ivory/_internal dist/Ivory.app/Contents/MacOS/
+                fi
+                # Copy frameworks if they exist
+                if [ -d "dist/Ivory/_internal/PyQt5/Qt5/lib" ]; then
+                  # Copy only essential frameworks, skip problematic ones
+                  for fw in QtCore QtGui QtWidgets; do
+                    if [ -d "dist/Ivory/_internal/PyQt5/Qt5/lib/${fw}.framework" ]; then
+                      cp -r "dist/Ivory/_internal/PyQt5/Qt5/lib/${fw}.framework" dist/Ivory.app/Contents/Frameworks/ 2>/dev/null || true
+                    fi
+                  done
+                fi
+                # Create minimal Info.plist
+                cat > dist/Ivory.app/Contents/Info.plist << 'PLIST_EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>Ivory</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.github.ganten7.ivory</string>
+  <key>CFBundleName</key>
+  <string>Ivory</string>
+  <key>CFBundleVersion</key>
+  <string>1.0.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>10.13</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+PLIST_EOF
+                echo "Manually created .app bundle"
+              else
+                echo "PyInstaller failed and dist/Ivory not usable"
+                tail -100 pyinstaller.log || true
+                exit 1
+              fi
+            else
+              echo "PyInstaller failed with different error"
+              echo "=== PyInstaller log ==="
+              tail -100 pyinstaller.log || true
+              echo "=== Build directory ==="
+              ls -la build/ || true
+              if [ -d "build/Ivory" ]; then
+                echo "=== Build warnings ==="
+                cat build/Ivory/warn-Ivory.txt || true
+              fi
+              echo "=== Dist directory ==="
+              ls -la dist/ || true
+              exit 1
             fi
-            echo "=== Dist directory ==="
-            ls -la dist/ || true
-            exit 1
           }
           
           # Move the .app bundle to current directory
