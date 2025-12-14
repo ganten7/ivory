@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PyQt5 version of Ivory - MIDI Keyboard Monitor with Chord Detection
-Windows-compatible version using PyQt5 instead of GTK3
+Ivory - MIDI Keyboard Monitor with Chord Detection
+Cross-platform application built with PyQt5
 """
 
 import sys

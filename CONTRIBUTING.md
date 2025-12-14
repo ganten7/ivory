@@ -17,7 +17,7 @@ When reporting a bug, include:
 - **Steps to reproduce** the problem
 - **Expected behavior** vs actual behavior
 - **Screenshots** if applicable
-- **System information** (OS, Python version, GTK version)
+- **System information** (OS, Python version, PyQt5 version)
 - **MIDI device** being used
 - **Chord that was misdetected** (if chord detection issue)
 
@@ -54,10 +54,15 @@ Feature suggestions are welcome! Open an issue with:
 
 ```bash
 # Linux (Debian/Ubuntu)
-sudo apt-get install python3 python3-gi gir1.2-gtk-3.0 python3-cairo python3-gi-cairo libasound2-dev
+sudo apt-get install python3 python3-pyqt5 python3-pyqt5.qtsvg
 
 # Install Python dependencies
-pip install mido python-rtmidi
+pip install -r requirements_pyqt5.txt
+```
+
+### Windows/macOS
+```bash
+pip install -r requirements_pyqt5.txt
 ```
 
 ### Running from Source

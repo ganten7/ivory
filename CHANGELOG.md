@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Borderless window mode with drag support
 - Context menu styling (dark mode aware: ivory on black / black on ivory)
 - Courier New font throughout (bold for UI, non-bold for chord display)
-- Cross-platform support (Linux, Windows, macOS) via PyQt5
+- Cross-platform support (Linux, Windows, macOS) using PyQt5
 
 ### Fixed
 - Minor 6th vs major 6th conflicts in closed voicings
@@ -42,7 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scale vs chord detection for clustered notes
 
 ### Changed
-- **Migrated from GTK3 to PyQt5** for better cross-platform compatibility
 - Chord labels now use parenthetical notation
   - Major add9: Cadd9 → C(add9)
   - Minor add9: Cmadd9 → Cm(add9)
