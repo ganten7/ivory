@@ -1,20 +1,23 @@
 # Ivory 🎹
 
-**Professional MIDI Keyboard Monitor with Advanced Chord Detection**
+**Simple MIDI Keyboard Monitor with Advanced Chord Detection**
 
 ![Ivory](icons/ivory.png)
 
-Ivory is a full-featured MIDI keyboard monitor that displays all 88 keys with real-time chord detection. Perfect for musicians, producers, and anyone learning music theory.
+Ivory is a cross-platform MIDI keyboard monitor that displays all 88 keys with real-time chord detection. Perfect for musicians, producers, and anyone learning music theory.
 
 ## ✨ Features
 
 - **88-Key Visualization**: Full piano keyboard display from A0 to C8
 - **Advanced Chord Detection**: Recognizes triads, 7ths, extensions (9, 11, 13), alterations, inversions, and slash chords
-- **Detachable Chord Display**: Separate window for chord names
-- **Dark Mode**: Easy on the eyes during long sessions
+- **Detachable Chord Display**: Independent window for chord names (supports borderless mode)
+- **Dark Mode**: Theme-aware UI with ivory-on-black or black-on-ivory styling
+- **Window Size Presets**: 50%, 75%, 100%, 125%, 150%, 175%, 200%
+- **Borderless Mode**: Frameless window with drag support
 - **Sustain Pedal Visualization**: See which notes are sustained
 - **Customizable Colors**: Personalize your keyboard appearance
-- **Multi-Platform**: Linux, Windows, macOS
+- **Settings Persistence**: All preferences saved between sessions
+- **Multi-Platform**: Linux (.deb), Windows (.exe), macOS (.app) via PyQt5
 
 ## 🎵 Chord Detection
 
@@ -27,16 +30,19 @@ Ivory's chord detector is incredibly sophisticated, supporting:
 - **Special Chords**: 6/9, add9, sus chords, altered chords
 - **Inversions & Slash Chords**: Automatically detected
 
-### New in v1.0.1
-- ✨ C9(b13) detection
-- ✨ Improved slash chord notation for minor add9 inversions
-- ✨ Enhanced label formatting with parentheses
+### New in v1.0.0 (PyQt5)
+- ✨ Complete PyQt5 migration for cross-platform support
+- ✨ Borderless window mode with drag support
+- ✨ Window size presets (50%-200%)
+- ✨ Theme-aware context menus (dark/light mode)
+- ✨ Courier New font throughout
+- ✨ Independent detachable chord window
 
 ## 🚀 Quick Start
 
 ### Linux (Debian/Ubuntu)
 ```bash
-sudo dpkg -i ivory_1.0.1_all.deb
+sudo dpkg -i ivory_1.0.0_all.deb
 ivory
 ```
 
@@ -57,7 +63,13 @@ python3 ivory.py
 
 ### Dependencies (Linux)
 ```bash
-sudo apt-get install python3 python3-gi gir1.2-gtk-3.0 python3-cairo python3-gi-cairo libasound2-dev
+sudo apt-get install python3 python3-pyqt5 python3-pyqt5.qtsvg
+pip install -r requirements_pyqt5.txt
+```
+
+### Dependencies (Windows/macOS)
+```bash
+pip install -r requirements_pyqt5.txt
 ```
 
 ## 🎹 Usage
@@ -77,16 +89,29 @@ sudo apt-get install python3 python3-gi gir1.2-gtk-3.0 python3-cairo python3-gi-
 
 ## 🛠️ Building
 
-### Linux .deb Package
+Builds are automated via GitHub Actions when you push a version tag (e.g., `v1.0.0`).
+
+### Manual Build (Linux)
 ```bash
-./build-deb.sh
+# Install dependencies
+sudo apt-get install python3-pyqt5 python3-pyqt5.qtsvg
+pip install -r requirements_pyqt5.txt
+
+# Run directly
+python3 ivory.py
 ```
 
-### Windows .exe
-Automatic via GitHub Actions on release.
+### Manual Build (Windows)
+```bash
+pip install -r requirements_pyqt5.txt pyinstaller
+pyinstaller --onefile --windowed --name ivory --icon=icons/ivory.png --add-data "chord_detector.py;." ivory.py
+```
 
-### macOS .app
-Automatic via GitHub Actions on release.
+### Manual Build (macOS)
+```bash
+pip install -r requirements_pyqt5.txt pyinstaller
+pyinstaller --onefile --windowed --name Ivory --icon=icons/ivory.png --add-data "chord_detector.py:." ivory.py
+```
 
 ## 🤝 Contributing
 
@@ -104,8 +129,8 @@ MIT License - see LICENSE file for details.
 
 ## 🙏 Acknowledgments
 
-- Courier Prime font for beautiful monospaced text
-- GTK3 for native GNOME integration
+- Courier New font for monospaced text
+- PyQt5 for cross-platform GUI framework
 - The open-source music community
 
 ## 📸 Screenshots

@@ -7,10 +7,6 @@ on:
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  # Windows and macOS builds disabled for v1.0.0 - GTK3 bundling requires additional work
-  # build-windows:
-  # build-macos:
-
   build-linux:
     runs-on: ubuntu-latest
     steps:
@@ -21,11 +17,14 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 python3-cairo python3-gi-cairo
-          pip install mido python-rtmidi
+          sudo apt-get install -y python3-pyqt5 python3-pyqt5.qtsvg
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements_pyqt5.txt
 
       - name: Build .deb package
         run: |
@@ -33,7 +32,6 @@ jobs:
           mkdir -p build-deb/usr/bin
           mkdir -p build-deb/usr/share/applications
           mkdir -p build-deb/usr/share/icons/hicolor/{16x16,32x32,48x48,64x64,128x128}/apps
-          mkdir -p build-deb/usr/share/metainfo
           mkdir -p build-deb/usr/share/doc/ivory
 
           # Copy files
@@ -48,7 +46,7 @@ jobs:
           Version=1.0
           Name=Ivory
           GenericName=MIDI Keyboard Monitor
-          Comment=Professional 88-key MIDI keyboard visualizer with advanced chord detection
+          Comment=Simple MIDI Keyboard Monitor with Advanced Chord Detection
           Exec=ivory
           Icon=ivory
           Terminal=false
@@ -68,9 +66,9 @@ jobs:
           Section: sound
           Priority: optional
           Architecture: all
-          Depends: python3 (>= 3.6), python3-gi, gir1.2-gtk-3.0, python3-cairo, python3-gi-cairo
+          Depends: python3 (>= 3.6), python3-pyqt5, python3-pyqt5.qtsvg
           Maintainer: Ganten <ganten7@github.com>
-          Description: Professional MIDI keyboard monitor with advanced chord detection
+          Description: Simple MIDI Keyboard Monitor with Advanced Chord Detection
            Ivory provides real-time visualization of all 88 piano keys with intelligent
            chord recognition supporting triads, 7th chords, extensions, alterations,
            inversions, and slash chords.
@@ -86,51 +84,94 @@ jobs:
           name: ivory-linux
           path: ivory_*.deb
 
-  # build-windows:
-  #   runs-on: windows-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: '3.10'
-  #     - name: Install GTK3 dependencies
-  #       run: |
-  #         # TODO: Fix pkg-config issues with MSYS2
-  #         # pip install pyinstaller mido python-rtmidi PyGObject
-  #     - name: Build executable
-  #       run: |
-  #         # pyinstaller --onefile --windowed --name ivory ivory.py
-  #     - name: Upload artifact
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: ivory-windows
-  #         path: dist/ivory.exe
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
 
-  # build-macos:
-  #   runs-on: macos-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: '3.10'
-  #     - name: Install dependencies
-  #       run: |
-  #         # TODO: Fix GTK3 bundling for macOS
-  #         # brew install gtk+3 pygobject3
-  #         # pip install mido python-rtmidi py2app
-  #     - name: Build .app
-  #       run: |
-  #         # py2app build here
-  #     - name: Upload artifact
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: ivory-macos
-  #         path: Ivory.dmg
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements_pyqt5.txt
+          pip install pyinstaller
+
+      - name: Build executable with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name ivory --icon=icons/ivory.png --add-data "chord_detector.py;." ivory.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ivory-windows
+          path: dist/ivory.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements_pyqt5.txt
+          pip install pyinstaller
+
+      - name: Build .app bundle
+        run: |
+          pyinstaller --onefile --windowed --name Ivory --icon=icons/ivory.png --add-data "chord_detector.py:." ivory.py
+          # Create .app bundle structure
+          mkdir -p Ivory.app/Contents/MacOS
+          mkdir -p Ivory.app/Contents/Resources
+          cp dist/Ivory Ivory.app/Contents/MacOS/
+          cp icons/ivory.png Ivory.app/Contents/Resources/
+          
+          # Create Info.plist
+          cat > Ivory.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>Ivory</string>
+            <key>CFBundleIconFile</key>
+            <string>ivory.png</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.github.ganten7.ivory</string>
+            <key>CFBundleName</key>
+            <string>Ivory</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0.0</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>10.13</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Create DMG
+        run: |
+          # Create DMG using hdiutil
+          hdiutil create -volname "Ivory" -srcfolder Ivory.app -ov -format UDZO Ivory.dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ivory-macos
+          path: Ivory.dmg
 
   release:
-    needs: [build-linux]
+    needs: [build-linux, build-windows, build-macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
@@ -144,6 +185,8 @@ jobs:
         with:
           files: |
             ivory-linux/*.deb
+            ivory-windows/*.exe
+            ivory-macos/*.dmg
           generate_release_notes: true
           draft: false
           prerelease: false
