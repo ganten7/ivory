@@ -171,7 +171,7 @@ jobs:
       - name: Build .app bundle
         run: |
           # PyInstaller with --windowed creates .app bundle automatically
-          # Collect all PyQt5 components including frameworks and plugins
+          # Use targeted imports - PyInstaller auto-detects frameworks for hidden imports
           python -m PyInstaller --onedir --windowed --name Ivory \
             --icon=icons/ivory.png \
             --add-data "icons:icons" \
@@ -179,12 +179,9 @@ jobs:
             --hidden-import PyQt5.QtCore \
             --hidden-import PyQt5.QtGui \
             --hidden-import PyQt5.QtWidgets \
-            --collect-all PyQt5 \
-            --collect-submodules PyQt5 \
+            --hidden-import PyQt5.sip \
             --hidden-import mido \
             --hidden-import rtmidi \
-            --collect-all mido \
-            --collect-all rtmidi \
             --exclude-module tkinter \
             --exclude-module matplotlib \
             --exclude-module numpy \
