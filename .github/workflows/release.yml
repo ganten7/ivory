@@ -242,10 +242,9 @@ jobs:
                   done
                 fi
                 # Create minimal Info.plist using Python to avoid YAML parsing issues
-                python3 << 'PYTHON_EOF'
+                python3 -c "
 import plistlib
 import os
-
 plist_data = {
     'CFBundleExecutable': 'Ivory',
     'CFBundleIdentifier': 'com.github.ganten7.ivory',
@@ -255,13 +254,11 @@ plist_data = {
     'LSMinimumSystemVersion': '10.13',
     'NSHighResolutionCapable': True
 }
-
 plist_path = 'dist/Ivory.app/Contents/Info.plist'
 os.makedirs(os.path.dirname(plist_path), exist_ok=True)
-
 with open(plist_path, 'wb') as f:
     plistlib.dump(plist_data, f)
-PYTHON_EOF
+"
                 echo "Manually created .app bundle"
               else
                 echo "PyInstaller failed and dist/Ivory not usable"
