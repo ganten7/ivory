@@ -14,6 +14,16 @@ from collections import defaultdict
 from typing import Dict, Set, Optional, Tuple
 from pathlib import Path
 
+# PyInstaller support: get resource path
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
+
 # Import chord detector
 try:
     from chord_detector import ChordDetector
@@ -564,8 +574,16 @@ class MIDIMonitor(QMainWindow):
         self.setMinimumSize(200, 150)
         
         # Try to set window icon if available
-        icon_path = Path(__file__).parent / "icons" / "ivory.png"
-        if icon_path.exists():
+        # Handle both development and PyInstaller bundle paths
+        try:
+            if getattr(sys, 'frozen', False):
+                icon_path = resource_path("icons/ivory.png")
+            else:
+                icon_path = Path(__file__).parent / "icons" / "ivory.png"
+        except:
+            icon_path = None
+        
+        if icon_path and os.path.exists(icon_path):
             self.setWindowIcon(QIcon(str(icon_path)))
         
         # Create central widget - use a layout to ensure proper window rendering
@@ -1711,8 +1729,18 @@ def main():
         sys.exit(0)
     
     # Try to set application icon if available
-    icon_path = Path(__file__).parent / "icons" / "ivory.png"
-    if icon_path.exists():
+    # Handle both development and PyInstaller bundle paths
+    try:
+        if getattr(sys, 'frozen', False):
+            # PyInstaller bundle
+            icon_path = resource_path("icons/ivory.png")
+        else:
+            # Development
+            icon_path = Path(__file__).parent / "icons" / "ivory.png"
+    except:
+        icon_path = None
+    
+    if icon_path and os.path.exists(icon_path):
         app.setWindowIcon(QIcon(str(icon_path)))
     
     # Create and show main window
@@ -1734,4 +1762,22 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Show error dialog if possible, otherwise print to stderr
+        import traceback
+        error_msg = f"Ivory encountered an error:\n\n{str(e)}\n\n{traceback.format_exc()}"
+        try:
+            # Try to show error dialog (only if PyQt5 is available)
+            if PYQT5_AVAILABLE:
+                from PyQt5.QtWidgets import QApplication, QMessageBox
+                if not QApplication.instance():
+                    error_app = QApplication(sys.argv)
+                QMessageBox.critical(None, "Ivory Error", error_msg)
+            else:
+                print(error_msg, file=sys.stderr)
+        except:
+            # Fallback to stderr
+            print(error_msg, file=sys.stderr)
+        sys.exit(1)

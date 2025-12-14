@@ -171,14 +171,20 @@ jobs:
       - name: Build .app bundle
         run: |
           # PyInstaller with --windowed creates .app bundle automatically
-          # Use simpler approach - let PyInstaller auto-detect most dependencies
+          # Collect all PyQt5 components including frameworks and plugins
           python -m PyInstaller --onedir --windowed --name Ivory \
+            --icon=icons/ivory.png \
+            --add-data "icons:icons" \
             --hidden-import chord_detector \
             --hidden-import PyQt5.QtCore \
             --hidden-import PyQt5.QtGui \
             --hidden-import PyQt5.QtWidgets \
+            --collect-all PyQt5 \
+            --collect-submodules PyQt5 \
             --hidden-import mido \
             --hidden-import rtmidi \
+            --collect-all mido \
+            --collect-all rtmidi \
             --exclude-module tkinter \
             --exclude-module matplotlib \
             --exclude-module numpy \
@@ -236,6 +242,28 @@ jobs:
             if [ -x "$EXECUTABLE" ]; then
               echo "✓ Executable is executable and found at: $EXECUTABLE"
               echo "✓ Ivory.app structure verified"
+              
+              # Check for PyQt5 frameworks
+              if [ -d "Ivory.app/Contents/Frameworks" ]; then
+                echo "✓ Frameworks directory exists"
+                echo "Frameworks found:"
+                ls -la Ivory.app/Contents/Frameworks/ | head -10 || true
+              else
+                echo "WARNING: Frameworks directory missing!"
+              fi
+              
+              # Check Info.plist
+              if [ -f "Ivory.app/Contents/Info.plist" ]; then
+                echo "✓ Info.plist exists"
+                echo "CFBundleExecutable in Info.plist:"
+                grep -A 1 "CFBundleExecutable" Ivory.app/Contents/Info.plist || true
+              else
+                echo "WARNING: Info.plist missing!"
+              fi
+              
+              # Try to get executable info (won't run it, just check it exists)
+              file "$EXECUTABLE" || true
+              otool -L "$EXECUTABLE" | head -20 || true
             else
               echo "ERROR: Executable is not executable!"
               exit 1
