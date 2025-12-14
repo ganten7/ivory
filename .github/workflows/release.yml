@@ -243,24 +243,15 @@ jobs:
                     fi
                   done
                 fi
-                # Create minimal Info.plist using Python to avoid YAML parsing issues
-                python3 -c "
-import plistlib
-import os
-plist_data = {
-    'CFBundleExecutable': 'Ivory',
-    'CFBundleIdentifier': 'com.github.ganten7.ivory',
-    'CFBundleName': 'Ivory',
-    'CFBundleVersion': '1.0.0',
-    'CFBundleShortVersionString': '1.0.0',
-    'LSMinimumSystemVersion': '10.13',
-    'NSHighResolutionCapable': True
-}
-plist_path = 'dist/Ivory.app/Contents/Info.plist'
-os.makedirs(os.path.dirname(plist_path), exist_ok=True)
-with open(plist_path, 'wb') as f:
-    plistlib.dump(plist_data, f)
-"
+                # Create minimal Info.plist using defaults command (macOS built-in)
+                defaults write dist/Ivory.app/Contents/Info CFBundleExecutable -string Ivory
+                defaults write dist/Ivory.app/Contents/Info CFBundleIdentifier -string com.github.ganten7.ivory
+                defaults write dist/Ivory.app/Contents/Info CFBundleName -string Ivory
+                defaults write dist/Ivory.app/Contents/Info CFBundleVersion -string 1.0.0
+                defaults write dist/Ivory.app/Contents/Info CFBundleShortVersionString -string 1.0.0
+                defaults write dist/Ivory.app/Contents/Info LSMinimumSystemVersion -string 10.13
+                defaults write dist/Ivory.app/Contents/Info NSHighResolutionCapable -bool true
+                plutil -convert xml1 dist/Ivory.app/Contents/Info.plist
                 echo "Manually created .app bundle"
               else
                 echo "PyInstaller failed and dist/Ivory not usable"
