@@ -241,29 +241,27 @@ jobs:
                     fi
                   done
                 fi
-                # Create minimal Info.plist
-                cat > dist/Ivory.app/Contents/Info.plist << 'PLIST_EOF'
-                <?xml version="1.0" encoding="UTF-8"?>
-                <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-                <plist version="1.0">
-                <dict>
-                  <key>CFBundleExecutable</key>
-                  <string>Ivory</string>
-                  <key>CFBundleIdentifier</key>
-                  <string>com.github.ganten7.ivory</string>
-                  <key>CFBundleName</key>
-                  <string>Ivory</string>
-                  <key>CFBundleVersion</key>
-                  <string>1.0.0</string>
-                  <key>CFBundleShortVersionString</key>
-                  <string>1.0.0</string>
-                  <key>LSMinimumSystemVersion</key>
-                  <string>10.13</string>
-                  <key>NSHighResolutionCapable</key>
-                  <true/>
-                </dict>
-                </plist>
-                PLIST_EOF
+                # Create minimal Info.plist using Python to avoid YAML parsing issues
+                python3 << 'PYTHON_EOF'
+import plistlib
+import os
+
+plist_data = {
+    'CFBundleExecutable': 'Ivory',
+    'CFBundleIdentifier': 'com.github.ganten7.ivory',
+    'CFBundleName': 'Ivory',
+    'CFBundleVersion': '1.0.0',
+    'CFBundleShortVersionString': '1.0.0',
+    'LSMinimumSystemVersion': '10.13',
+    'NSHighResolutionCapable': True
+}
+
+plist_path = 'dist/Ivory.app/Contents/Info.plist'
+os.makedirs(os.path.dirname(plist_path), exist_ok=True)
+
+with open(plist_path, 'wb') as f:
+    plistlib.dump(plist_data, f)
+PYTHON_EOF
                 echo "Manually created .app bundle"
               else
                 echo "PyInstaller failed and dist/Ivory not usable"
