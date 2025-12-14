@@ -101,7 +101,19 @@ jobs:
 
       - name: Build executable with PyInstaller
         run: |
-          pyinstaller --onefile --windowed --name ivory --add-data "chord_detector.py;." --hidden-import PyQt5.QtCore --hidden-import PyQt5.QtGui --hidden-import PyQt5.QtWidgets --hidden-import PyQt5.QtWidgets.QApplication ivory.py
+          pyinstaller --onefile --windowed --name ivory \
+            --add-data "chord_detector.py;." \
+            --hidden-import chord_detector \
+            --hidden-import PyQt5.QtCore \
+            --hidden-import PyQt5.QtGui \
+            --hidden-import PyQt5.QtWidgets \
+            --hidden-import mido \
+            --hidden-import rtmidi \
+            ivory.py || {
+            echo "PyInstaller failed, checking output..."
+            cat build/ivory/warn-ivory.txt || true
+            exit 1
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -127,14 +139,30 @@ jobs:
       - name: Build .app bundle
         run: |
           # PyInstaller with --windowed creates .app bundle automatically
-          pyinstaller --onedir --windowed --name Ivory --add-data "chord_detector.py:." --hidden-import PyQt5.QtCore --hidden-import PyQt5.QtGui --hidden-import PyQt5.QtWidgets ivory.py
+          pyinstaller --onedir --windowed --name Ivory \
+            --add-data "chord_detector.py:." \
+            --hidden-import chord_detector \
+            --hidden-import PyQt5.QtCore \
+            --hidden-import PyQt5.QtGui \
+            --hidden-import PyQt5.QtWidgets \
+            --hidden-import mido \
+            --hidden-import rtmidi \
+            ivory.py || {
+            echo "PyInstaller failed, checking output..."
+            ls -la dist/ || true
+            cat build/Ivory/warn-Ivory.txt || true
+            exit 1
+          }
           
           # Move the .app bundle to current directory
           if [ -d "dist/Ivory.app" ]; then
             mv dist/Ivory.app .
           else
             echo "Error: Ivory.app not found in dist/"
-            ls -la dist/
+            echo "Contents of dist/:"
+            ls -la dist/ || true
+            echo "Contents of build/:"
+            ls -la build/ || true
             exit 1
           fi
 
