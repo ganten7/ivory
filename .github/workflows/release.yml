@@ -198,8 +198,29 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Download all artifacts
+      - name: Download Linux artifact
         uses: actions/download-artifact@v4
+        with:
+          name: ivory-linux
+          path: ivory-linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ivory-windows
+          path: ivory-windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ivory-macos
+          path: ivory-macos
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Downloaded artifacts:"
+          find . -type f \( -name "*.deb" -o -name "*.exe" -o -name "*.dmg" \) | head -20
+          ls -la ivory-*/ || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
