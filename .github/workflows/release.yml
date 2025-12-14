@@ -195,7 +195,10 @@ jobs:
             --hidden-import PyQt5.QtWidgets \
             --hidden-import PyQt5.sip \
             --hidden-import mido \
+            --hidden-import mido.backends.rtmidi \
             --hidden-import rtmidi \
+            --collect-all mido \
+            --collect-all rtmidi \
             --exclude-module tkinter \
             --exclude-module matplotlib \
             --exclude-module numpy \
