@@ -218,31 +218,10 @@ jobs:
             # Ensure executable has correct permissions
             chmod +x "$EXECUTABLE" || true
             
-            # Verify Info.plist exists
+            # Verify Info.plist exists (PyInstaller should create it, but verify)
             if [ ! -f "Ivory.app/Contents/Info.plist" ]; then
-              echo "WARNING: Info.plist missing, creating one..."
-              cat > Ivory.app/Contents/Info.plist << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleExecutable</key>
-  <string>$(basename "$EXECUTABLE")</string>
-  <key>CFBundleIdentifier</key>
-  <string>com.github.ganten7.ivory</string>
-  <key>CFBundleName</key>
-  <string>Ivory</string>
-  <key>CFBundleVersion</key>
-  <string>1.0.0</string>
-  <key>CFBundleShortVersionString</key>
-  <string>1.0.0</string>
-  <key>LSMinimumSystemVersion</key>
-  <string>10.13</string>
-  <key>NSHighResolutionCapable</key>
-  <true/>
-</dict>
-</plist>
-EOF
+              echo "WARNING: Info.plist missing, PyInstaller should have created it"
+              echo "This may indicate a build issue"
             fi
             
             # Remove quarantine attribute (helps with Gatekeeper)
