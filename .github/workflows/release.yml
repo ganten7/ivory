@@ -197,9 +197,65 @@ jobs:
           # Move the .app bundle to current directory
           if [ -d "dist/Ivory.app" ]; then
             mv dist/Ivory.app .
+            
+            # Verify .app bundle structure
+            echo "Verifying .app bundle structure..."
+            if [ ! -d "Ivory.app/Contents/MacOS" ]; then
+              echo "ERROR: Contents/MacOS directory missing!"
+              exit 1
+            fi
+            
+            # Find the executable
+            EXECUTABLE=$(find Ivory.app/Contents/MacOS -type f -perm +111 | head -1)
+            if [ -z "$EXECUTABLE" ]; then
+              echo "ERROR: No executable found in Ivory.app/Contents/MacOS"
+              ls -la Ivory.app/Contents/MacOS/ || true
+              exit 1
+            fi
+            
+            echo "Found executable: $EXECUTABLE"
+            
+            # Ensure executable has correct permissions
+            chmod +x "$EXECUTABLE" || true
+            
+            # Verify Info.plist exists
+            if [ ! -f "Ivory.app/Contents/Info.plist" ]; then
+              echo "WARNING: Info.plist missing, creating one..."
+              cat > Ivory.app/Contents/Info.plist << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>$(basename "$EXECUTABLE")</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.github.ganten7.ivory</string>
+  <key>CFBundleName</key>
+  <string>Ivory</string>
+  <key>CFBundleVersion</key>
+  <string>1.0.0</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>10.13</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+</dict>
+</plist>
+EOF
+            fi
+            
             # Remove quarantine attribute (helps with Gatekeeper)
             xattr -cr Ivory.app || true
-            echo "✓ Ivory.app created successfully"
+            
+            # Test that we can at least see the executable
+            if [ -x "$EXECUTABLE" ]; then
+              echo "✓ Executable is executable and found at: $EXECUTABLE"
+              echo "✓ Ivory.app structure verified"
+            else
+              echo "ERROR: Executable is not executable!"
+              exit 1
+            fi
           else
             echo "Error: Ivory.app not found in dist/"
             echo "Contents of dist/:"

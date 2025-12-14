@@ -24,6 +24,29 @@ If you encounter a "JavaScript error" or "Node.js error" when running `ivory.exe
 4. **First launch**: Right-click `Ivory.app` → "Open" (to bypass Gatekeeper)
 5. When prompted, click **"Open"** again
 
+### Troubleshooting: App Won't Launch
+
+If the app doesn't launch after bypassing Gatekeeper, try running it from Terminal to see error messages:
+
+```bash
+# Navigate to Applications
+cd /Applications
+
+# Try to run the app directly
+./Ivory.app/Contents/MacOS/Ivory
+
+# Or if that doesn't work, find the executable name:
+ls -la Ivory.app/Contents/MacOS/
+
+# Then run it directly (replace "Ivory" with actual executable name if different)
+./Ivory.app/Contents/MacOS/[executable-name]
+```
+
+**Common issues:**
+- **Missing Python**: The app should be standalone, but if you see Python errors, you may need Python 3.6+ installed
+- **Missing libraries**: Check Terminal output for missing .dylib files
+- **Permission issues**: Run `chmod +x /Applications/Ivory.app/Contents/MacOS/*`
+
 ### Installation (DMG - Alternative)
 
 1. **Download** `Ivory.dmg` from the releases page
