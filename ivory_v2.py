@@ -567,36 +567,36 @@ class ChordLabelWidget(QWidget):
                 # Process character by character
                 for i, char in enumerate(display_chord):
                     if char == '°':
-                        # Add minimal space before symbol
-                        padding_before = 3
-                        current_x += padding_before
-
-                        # Draw ° as a small circle
+                        # Calculate proper spacing: use average character width for centering
+                        symbol_width = avg_char_width  # Allocate full character width for symbol
                         circle_size = max(4, int(font_size * 0.35))
                         circle_y = int(text_y - metrics.ascent() * 0.7)
+                        circle_x = current_x + (symbol_width - circle_size) // 2  # Center circle in allocated space
+                        
+                        # Draw ° as a small circle
                         painter.setPen(QPen(QColor(232, 220, 192), 1.5))
                         painter.setBrush(Qt.NoBrush)
-                        painter.drawEllipse(current_x, circle_y, circle_size, circle_size)
+                        painter.drawEllipse(circle_x, circle_y, circle_size, circle_size)
 
-                        # Move past symbol with minimal padding after
-                        current_x += circle_size + 3
+                        # Move past symbol with proper spacing
+                        current_x += symbol_width
                     elif char == 'ø':
-                        # Add minimal space before symbol
-                        padding_before = 3
-                        current_x += padding_before
-
-                        # Draw ø as a circle with a diagonal line
+                        # Calculate proper spacing: use average character width for centering
+                        symbol_width = avg_char_width  # Allocate full character width for symbol
                         circle_size = max(6, int(font_size * 0.45))
                         circle_y = int(text_y - metrics.ascent() * 0.4)
+                        circle_x = current_x + (symbol_width - circle_size) // 2  # Center circle in allocated space
+                        
+                        # Draw ø as a circle with a diagonal line
                         painter.setPen(QPen(QColor(232, 220, 192), 1.5))
                         painter.setBrush(Qt.NoBrush)
-                        painter.drawEllipse(current_x, circle_y, circle_size, circle_size)
+                        painter.drawEllipse(circle_x, circle_y, circle_size, circle_size)
                         # Draw diagonal slash through circle
-                        painter.drawLine(current_x, circle_y + circle_size,
-                                       current_x + circle_size, circle_y)
+                        painter.drawLine(circle_x, circle_y + circle_size,
+                                       circle_x + circle_size, circle_y)
 
-                        # Move past symbol with minimal padding after
-                        current_x += circle_size + 3
+                        # Move past symbol with proper spacing
+                        current_x += symbol_width
                     else:
                         # Draw regular character
                         painter.drawText(current_x, int(text_y), char)
@@ -1905,6 +1905,17 @@ class MIDIMonitor(QMainWindow):
         link_label.setAlignment(Qt.AlignCenter)
         link_label.setOpenExternalLinks(True)
         layout.addWidget(link_label)
+        
+        # Add version number at bottom left
+        version_label = QLabel("v.1.0.13")
+        version_font = QFont("Courier New", 8, QFont.Normal)
+        if not version_font.exactMatch():
+            version_font = QFont("Courier", 8, QFont.Normal)
+        if not version_font.exactMatch():
+            version_font = QFont("monospace", 8, QFont.Normal)
+        version_label.setFont(version_font)
+        version_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        layout.addWidget(version_label)
         
         # Add close button
         buttons = QDialogButtonBox(QDialogButtonBox.Ok)
