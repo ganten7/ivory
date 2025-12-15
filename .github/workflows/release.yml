@@ -21,15 +21,45 @@ jobs:
             build_command: |
               # Install build tools
               sudo apt-get update && sudo apt-get install -y dpkg-dev
-              # Ensure package structure exists
-              if [ ! -d "ivory_1.0.13_all" ]; then
-                echo "Error: ivory_1.0.13_all directory not found in repo"
-                exit 1
+              # Ensure package structure exists - create if missing
+              mkdir -p ivory_1.0.13_all/DEBIAN
+              mkdir -p ivory_1.0.13_all/usr/bin
+              mkdir -p ivory_1.0.13_all/usr/share/applications
+              mkdir -p ivory_1.0.13_all/usr/share/metainfo
+              mkdir -p ivory_1.0.13_all/usr/share/appdata
+              mkdir -p ivory_1.0.13_all/usr/share/icons/hicolor/{16x16,32x32,48x48,64x64,128x128}/apps
+              # Copy or create control file
+              if [ -f "ivory_1.0.13_all/DEBIAN/control" ]; then
+                echo "Using existing control file"
+              else
+                cat > ivory_1.0.13_all/DEBIAN/control << 'CONTROL_EOF'
+Package: ivory
+Version: 1.0.13
+Section: sound
+Priority: optional
+Architecture: all
+Depends: python3, python3-pyqt5, python3-mido, python3-rtmidi
+Maintainer: Ivory Development Team
+Description: MIDI Keyboard Monitor with Advanced Chord Detection
+ Ivory is a real-time MIDI keyboard monitor and chord detection application.
+CONTROL_EOF
               fi
               # Copy source files to package
               cp ivory_v2.py ivory_1.0.13_all/usr/bin/ivory
               cp chord_detector_v2.py ivory_1.0.13_all/usr/bin/chord_detector_v2.py
               chmod +x ivory_1.0.13_all/usr/bin/ivory
+              # Copy metadata files if they exist
+              [ -f "ivory_1.0.13_all/usr/share/applications/ivory.desktop" ] && cp ivory_1.0.13_all/usr/share/applications/ivory.desktop ivory_1.0.13_all/usr/share/applications/ || true
+              [ -f "ivory_1.0.13_all/usr/share/metainfo/ivory.metainfo.xml" ] && cp ivory_1.0.13_all/usr/share/metainfo/ivory.metainfo.xml ivory_1.0.13_all/usr/share/metainfo/ || true
+              [ -f "ivory_1.0.13_all/usr/share/appdata/ivory.appdata.xml" ] && cp ivory_1.0.13_all/usr/share/appdata/ivory.appdata.xml ivory_1.0.13_all/usr/share/appdata/ || true
+              # Copy icons if they exist, create from 128x128 if needed
+              if [ -f "ivory_1.0.13_all/usr/share/icons/hicolor/128x128/apps/ivory.png" ]; then
+                for size in 16 32 48 64; do
+                  if [ ! -f "ivory_1.0.13_all/usr/share/icons/hicolor/${size}x${size}/apps/ivory.png" ]; then
+                    python3 -c "from PIL import Image; img=Image.open('ivory_1.0.13_all/usr/share/icons/hicolor/128x128/apps/ivory.png'); img.resize((${size},${size})).save('ivory_1.0.13_all/usr/share/icons/hicolor/${size}x${size}/apps/ivory.png')" || true
+                  fi
+                done
+              fi
               # Build package
               dpkg-deb --build ivory_1.0.13_all
               mkdir -p dist
