@@ -19,11 +19,13 @@ jobs:
             platform: linux
             artifact_name: ivory_1.0.1_all.deb
             build_command: |
-              sudo apt-get update
-              sudo apt-get install -y dpkg-deb
               mkdir -p dist
-              dpkg-deb --build ivory_1.0.1_all
-              mv ivory_1.0.1_all.deb dist/
+              if [ -f "ivory_1.0.1_all.deb" ]; then
+                cp ivory_1.0.1_all.deb dist/
+              else
+                dpkg-deb --build ivory_1.0.1_all
+                mv ivory_1.0.1_all.deb dist/
+              fi
 
           - os: windows-latest
             platform: windows
