@@ -32,17 +32,7 @@ jobs:
               if [ -f "ivory_1.0.13_all/DEBIAN/control" ]; then
                 echo "Using existing control file"
               else
-                cat > ivory_1.0.13_all/DEBIAN/control << 'CONTROL_EOF'
-Package: ivory
-Version: 1.0.13
-Section: sound
-Priority: optional
-Architecture: all
-Depends: python3, python3-pyqt5, python3-mido, python3-rtmidi
-Maintainer: Ivory Development Team
-Description: MIDI Keyboard Monitor with Advanced Chord Detection
- Ivory is a real-time MIDI keyboard monitor and chord detection application.
-CONTROL_EOF
+                printf 'Package: ivory\nVersion: 1.0.13\nSection: sound\nPriority: optional\nArchitecture: all\nDepends: python3, python3-pyqt5, python3-mido, python3-rtmidi\nMaintainer: Ivory Development Team\nDescription: MIDI Keyboard Monitor with Advanced Chord Detection\n Ivory is a real-time MIDI keyboard monitor and chord detection application.\n' > ivory_1.0.13_all/DEBIAN/control
               fi
               # Copy source files to package
               cp ivory_v2.py ivory_1.0.13_all/usr/bin/ivory
