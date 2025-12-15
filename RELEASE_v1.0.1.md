@@ -183,4 +183,4 @@ MIT License
 
 ---
 
-**Ivory v1.0.1** - Advanced MIDI keyboard monitor with professional chord detection.
+**Ivory v1.0.1** - Simple MIDI keyboard monitor with advanced chord detection.

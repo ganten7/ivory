@@ -24,7 +24,7 @@ def resource_path(relative_path):
         base_path = os.path.abspath(os.path.dirname(__file__))
     return os.path.join(base_path, relative_path)
 
-# Import chord detector (v2.0 with improvements)
+# Import chord detector (enhanced version with improvements)
 try:
     from chord_detector_v2 import ChordDetector
     CHORD_DETECTOR_AVAILABLE = True

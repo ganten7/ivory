@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/ganten/ivory/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Ivory** is a professional MIDI keyboard monitor and chord detection application with support for 100+ chord patterns, real-time visualization, and intelligent chord recognition.
+**Ivory** is a simple MIDI keyboard monitor and chord detection application with support for 100+ chord patterns, real-time visualization, and intelligent chord recognition.
 
 ## Screenshots
 
@@ -20,7 +20,7 @@
 
 ## Overview
 
-Ivory features an enhanced chord detection algorithm with better accuracy, improved scale detection, and sophisticated handling of edge cases while supporting professional jazz voicings.
+Ivory features an enhanced chord detection algorithm with better accuracy, improved scale detection, and sophisticated handling of edge cases while supporting jazz voicings.
 
 ## ✨ What's New in v1.0.1
 
@@ -201,7 +201,7 @@ Same as Ivory - MIT License
 ## Author
 
 Based on original Ivory chord detector by Ganten
-Enhanced for v2.0 - December 2025
+Enhanced and released as v1.0.1 - December 2025
 
 ---
 
@@ -239,4 +239,4 @@ For issues or questions:
 
 ---
 
-**Ivory 2.0** - More accurate, more versatile, still comprehensive.
+**Ivory v1.0.1** - Simple MIDI keyboard monitor with advanced chord detection.
