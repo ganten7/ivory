@@ -93,3 +93,9 @@ python3 ivory.py
 - Ensure your MIDI device is connected and recognized by the OS
 - Check system MIDI settings
 - Try selecting a different MIDI input from the application menu
+
+
+
+
+
+

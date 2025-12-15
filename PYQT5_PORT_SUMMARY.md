@@ -144,3 +144,10 @@ The PyQt5 version maintains the same logical structure:
 If you encounter any issues or need modifications, the code is well-commented and follows the same structure as the GTK3 version, making it easy to maintain both versions in parallel.
 
 
+
+
+
+
+
+
+

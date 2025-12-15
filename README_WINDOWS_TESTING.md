@@ -139,3 +139,10 @@ The keyboard rendering itself will look **identical** to the GTK3 version. The o
 The actual piano keyboard drawing is pixel-perfect identical.
 
 
+
+
+
+
+
+
+

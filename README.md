@@ -135,7 +135,17 @@ MIT License - see LICENSE file for details.
 
 ## 📸 Screenshots
 
-Coming soon!
+### Cm11 - Minor 11th Chord Detection
+![Cm11 Chord](https://github.com/ganten/ivory/releases/download/v1.0.1/Cm11.png)
+*Ivory detecting a Cm11 chord - demonstrating extended chord recognition*
+
+### D7(b9,#11) - Complex Altered Dominant
+![D7(b9,#11) Chord](https://github.com/ganten/ivory/releases/download/v1.0.1/D7-b9-11.png)
+*Advanced altered dominant detection: D7 with both b9 and #11 alterations*
+
+### Ebm11 - Extended Minor Chord
+![Ebm11 Chord](https://github.com/ganten/ivory/releases/download/v1.0.1/Ebm11.png)
+*Ebm11 chord detection showcasing Ivory's comprehensive minor chord patterns*
 
 ## 🔗 Links
 
