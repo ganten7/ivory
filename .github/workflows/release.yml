@@ -1,0 +1,58 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Check if .deb package exists
+        id: check_deb
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION_NUM="${VERSION#v}"
+          DEB_FILE="ivory_${VERSION_NUM}_all.deb"
+          if [ -f "$DEB_FILE" ]; then
+            echo "DEB_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "DEB_FILE=$DEB_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "DEB_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read release notes
+        id: release_notes
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          if [ -f "RELEASE_${VERSION}.md" ]; then
+            echo "NOTES_FILE=RELEASE_${VERSION}.md" >> $GITHUB_OUTPUT
+          else
+            echo "NOTES_FILE=README.md" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Ivory ${{ steps.get_version.outputs.VERSION }}
+          body_path: ${{ steps.release_notes.outputs.NOTES_FILE }}
+          draft: false
+          prerelease: false
+          files: |
+            ${{ steps.check_deb.outputs.DEB_FILE }}
+            screenshots/*.png
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
