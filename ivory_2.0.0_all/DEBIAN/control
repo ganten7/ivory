@@ -1,0 +1,24 @@
+Package: ivory
+Version: 2.0.0
+Section: sound
+Priority: optional
+Architecture: all
+Depends: python3, python3-pyqt5, python3-mido, python3-rtmidi
+Maintainer: Ivory Development Team
+Description: MIDI Keyboard Monitor with Advanced Chord Detection v2.0
+ Ivory is a real-time MIDI keyboard monitor and chord detection application.
+ Features:
+  - Real-time visualization of 88-key piano keyboard
+  - Advanced jazz chord detection with 100+ chord patterns
+  - MIDI input support with sustain pedal
+  - Click-to-toggle notes for testing without MIDI keyboard
+  - Dark/light mode themes
+  - Customizable colors
+  - Cross-platform (Linux, Windows, macOS)
+ .
+ Version 2.0 improvements:
+  - Enhanced chord detection algorithm
+  - Better handling of altered dominants and extended chords
+  - Improved slash chord detection
+  - Bad voicing rejection
+  - Combined MIDI and manual note input
