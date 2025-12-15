@@ -67,9 +67,9 @@
 ### Download
 
 Download the latest release for your platform:
-- **Windows**: [Ivory-Windows-v1.0.1.exe](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-Windows-v1.0.1.exe)
-- **macOS**: [Ivory-macOS-v1.0.1.zip](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-macOS-v1.0.1.zip)
-- **Linux**: [ivory_1.0.1_all.deb](https://github.com/ganten/ivory/releases/download/v1.0.1/ivory_1.0.1_all.deb) (Debian/Ubuntu)
+- **Windows**: [Ivory-Windows-v1.0.1.exe](https://github.com/ganten7/ivory/releases/download/v1.0.1/Ivory-Windows-v1.0.1.exe)
+- **macOS**: [Ivory-macOS-v1.0.1.zip](https://github.com/ganten7/ivory/releases/download/v1.0.1/Ivory-macOS-v1.0.1.zip)
+- **Linux**: [ivory_1.0.1_all.deb](https://github.com/ganten7/ivory/releases/download/v1.0.1/ivory_1.0.1_all.deb) (Debian/Ubuntu)
 
 ### Install on Windows
 
