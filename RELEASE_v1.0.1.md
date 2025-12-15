@@ -7,7 +7,7 @@
 *Ivory detecting a Cm11 chord - demonstrating extended chord recognition*
 
 ### D7(b9,#11) - Complex Altered Dominant
-![D7(b9,#11) Chord](screenshots/D7%20(b9,%23%2311).png)
+![D7(b9,#11) Chord](screenshots/D7-b9-11.png)
 *Advanced altered dominant detection: D7 with both b9 and #11 alterations*
 
 ### Ebm11 - Extended Minor Chord
