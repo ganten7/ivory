@@ -48,5 +48,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='../screenshots/icon.ico' if os.path.exists('../screenshots/icon.ico') else None,
+    icon='../screenshots/icon.ico',
 )

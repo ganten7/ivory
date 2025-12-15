@@ -157,7 +157,7 @@ class PianoWidget(QWidget):
 
         # Manual click mode - for testing without MIDI keyboard
         self.manual_notes: Set[int] = set()  # Notes toggled by mouse clicks
-        self.click_enabled = False  # Enable click-to-toggle (disabled by default)
+        self.click_enabled = False  # Key toggle is OFF by default
 
         # Color settings
         self.dark_mode = False
@@ -481,8 +481,14 @@ class ChordLabelWidget(QWidget):
     
     def set_chord(self, chord: Optional[str]):
         """Update chord text"""
-        self.current_chord = chord
-        self.update()
+        try:
+            self.current_chord = chord
+            self.update()
+        except Exception as e:
+            print(f"ERROR in set_chord: {e}")
+            import traceback
+            traceback.print_exc()
+            self.current_chord = None
     
     def _on_context_menu(self, pos: QPoint):
         """Forward context menu to parent window"""
@@ -494,23 +500,31 @@ class ChordLabelWidget(QWidget):
     
     def paintEvent(self, event):
         """Draw chord text"""
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        # Fill ENTIRE widget area with black background (no white space)
-        # Use widget.rect() not event.rect() to fill the entire widget
-        widget_rect = self.rect()
-        painter.fillRect(widget_rect, QColor(0, 0, 0))
-        
-        width = self.width()
-        height = self.height()
-        
-        if not self.current_chord:
+        try:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+
+            # Fill ENTIRE widget area with black background (no white space)
+            # Use widget.rect() not event.rect() to fill the entire widget
+            widget_rect = self.rect()
+            painter.fillRect(widget_rect, QColor(0, 0, 0))
+
+            width = self.width()
+            height = self.height()
+
+            if not self.current_chord:
+                return
+
+            # Convert text representations to symbols for display
+            # hdim7 → ø7, dim7 → °7 (order matters: hdim7 must be replaced first!)
+            display_chord = self.current_chord.replace('hdim7', 'ø7').replace('dim7', '°7')
+
+            # Calculate font size based on height
+            font_size = max(12, int(self.height() * 0.6))
+        except Exception as e:
+            print(f"Error in paintEvent initialization: {e}")
             return
-        
-        # Calculate font size based on height
-        font_size = max(12, int(self.height() * 0.6))
-        
+
         # Set font - use Courier New (non-bold), fallback to Courier, then monospace
         font = QFont("Courier New", font_size, QFont.Normal)
         if not font.exactMatch():
@@ -524,18 +538,18 @@ class ChordLabelWidget(QWidget):
         # Measure text
         metrics = QFontMetrics(font)
         # Use boundingRect for width (width() is deprecated)
-        text_rect = metrics.boundingRect(self.current_chord)
+        text_rect = metrics.boundingRect(display_chord)
         text_width = text_rect.width()
         text_height = text_rect.height()
-        
-        # Scale font if too wide
+
+        # Scale font if too wide (but maintain minimum size)
         if text_width > self.width() * 0.95:
             scale_factor = (self.width() * 0.95) / text_width
-            font_size = int(font_size * scale_factor)
+            font_size = max(6, int(font_size * scale_factor))  # Minimum 6pt font
             font.setPointSize(font_size)
             painter.setFont(font)
             metrics = QFontMetrics(font)
-            text_rect = metrics.boundingRect(self.current_chord)
+            text_rect = metrics.boundingRect(display_chord)
             text_width = text_rect.width()
             text_height = text_rect.height()
         
@@ -543,36 +557,61 @@ class ChordLabelWidget(QWidget):
         text_x = (self.width() - text_width) / 2
         text_y = (self.height() + text_height) / 2 - metrics.descent()
 
-        # Special handling for ° symbol - make it slightly larger
-        if '°' in self.current_chord:
-            # Draw text in parts with larger ° symbol
-            parts = self.current_chord.split('°')
-            current_x = int(text_x)
+        # Special handling for ° and ø symbols - draw them as shapes instead of text
+        try:
+            if '°' in display_chord or 'ø' in display_chord:
+                # Get average character width for spacing
+                avg_char_width = metrics.averageCharWidth()
+                current_x = int(text_x)
 
-            for i, part in enumerate(parts):
-                # Draw the text part
-                if part:
-                    painter.drawText(current_x, int(text_y), part)
-                    current_x += metrics.boundingRect(part).width()
+                # Process character by character
+                for i, char in enumerate(display_chord):
+                    if char == '°':
+                        # Add minimal space before symbol
+                        padding_before = 3
+                        current_x += padding_before
 
-                # Draw the ° symbol with larger font (except after last part)
-                if i < len(parts) - 1:
-                    # Make ° symbol 1.3x larger
-                    degree_font = QFont(font)
-                    degree_font.setPointSize(int(font_size * 1.3))
-                    painter.setFont(degree_font)
-                    degree_metrics = QFontMetrics(degree_font)
+                        # Draw ° as a small circle
+                        circle_size = max(4, int(font_size * 0.35))
+                        circle_y = int(text_y - metrics.ascent() * 0.7)
+                        painter.setPen(QPen(QColor(232, 220, 192), 1.5))
+                        painter.setBrush(Qt.NoBrush)
+                        painter.drawEllipse(current_x, circle_y, circle_size, circle_size)
 
-                    # Adjust y position to align baseline
-                    degree_y = text_y - int((degree_metrics.ascent() - metrics.ascent()) * 0.7)
-                    painter.drawText(current_x, degree_y, '°')
-                    current_x += degree_metrics.boundingRect('°').width()
+                        # Move past symbol with minimal padding after
+                        current_x += circle_size + 3
+                    elif char == 'ø':
+                        # Add minimal space before symbol
+                        padding_before = 3
+                        current_x += padding_before
 
-                    # Restore original font
-                    painter.setFont(font)
-        else:
-            # No ° symbol, draw normally
-            painter.drawText(int(text_x), int(text_y), self.current_chord)
+                        # Draw ø as a circle with a diagonal line
+                        circle_size = max(6, int(font_size * 0.45))
+                        circle_y = int(text_y - metrics.ascent() * 0.4)
+                        painter.setPen(QPen(QColor(232, 220, 192), 1.5))
+                        painter.setBrush(Qt.NoBrush)
+                        painter.drawEllipse(current_x, circle_y, circle_size, circle_size)
+                        # Draw diagonal slash through circle
+                        painter.drawLine(current_x, circle_y + circle_size,
+                                       current_x + circle_size, circle_y)
+
+                        # Move past symbol with minimal padding after
+                        current_x += circle_size + 3
+                    else:
+                        # Draw regular character
+                        painter.drawText(current_x, int(text_y), char)
+                        current_x += metrics.boundingRect(char).width()
+            else:
+                # No special symbols, draw normally
+                painter.drawText(int(text_x), int(text_y), display_chord)
+        except Exception as e:
+            # If drawing fails, fall back to simple text rendering without symbols
+            print(f"Error rendering chord with symbols: {e}")
+            try:
+                # Fall back to drawing the original text (which has dim7/hdim7, no symbols)
+                painter.drawText(int(text_x), int(text_y), self.current_chord)
+            except:
+                pass  # Silently fail
 
 
 class MIDIMonitor(QMainWindow):
@@ -649,7 +688,7 @@ class MIDIMonitor(QMainWindow):
             "borderless_mode": False,
             "chord_window_detached": False,
             "detached_chord_height": 50,
-            "click_enabled": False,
+            "click_enabled": False,  # Key toggle is OFF by default
             "show_no_midi_warning": True
         }
         
@@ -669,7 +708,8 @@ class MIDIMonitor(QMainWindow):
                     self._borderless_mode = config.get("borderless_mode", defaults["borderless_mode"])
                     self.chord_window_detached = config.get("chord_window_detached", defaults["chord_window_detached"])
                     self._detached_chord_height = config.get("detached_chord_height", defaults["detached_chord_height"])
-                    self._click_enabled = config.get("click_enabled", defaults["click_enabled"])
+                    # Always start with keytoggle OFF, regardless of saved setting
+                    self._click_enabled = False
                     self.show_no_midi_warning = config.get("show_no_midi_warning", defaults["show_no_midi_warning"])
             except Exception:
                 # Use defaults on error
@@ -719,7 +759,7 @@ class MIDIMonitor(QMainWindow):
             "borderless_mode": getattr(self, '_borderless_mode', False),
             "chord_window_detached": getattr(self, 'chord_window_detached', False),
             "detached_chord_height": getattr(self, '_detached_chord_height', 50),
-            "click_enabled": getattr(self.piano_widget, 'click_enabled', True) if hasattr(self, 'piano_widget') else True,
+            "click_enabled": getattr(self.piano_widget, 'click_enabled', False) if hasattr(self, 'piano_widget') else False,
             "show_no_midi_warning": self.show_no_midi_warning
         }
         
@@ -821,8 +861,6 @@ class MIDIMonitor(QMainWindow):
         
         # Make window non-resizable - fixed size only
         self.setFixedSize(initial_width, initial_height)
-        print(f"DEBUG init_ui: Set fixed size: {initial_width}x{initial_height}")
-        print(f"DEBUG init_ui: Window visible: {self.isVisible()}")
         
         # Restore chord window detached state if saved
         if self.chord_window_detached and CHORD_DETECTOR_AVAILABLE and self.chord_detection_enabled:
@@ -1184,27 +1222,39 @@ class MIDIMonitor(QMainWindow):
         if not self.chord_detection_enabled or not self.chord_detector:
             return
 
-        # Combine MIDI notes and manual click notes
-        active_note_numbers = set(self.active_notes.keys())  # MIDI notes
-        active_note_numbers.update(self.piano_widget.manual_notes)  # Manual click notes
+        try:
+            # Combine MIDI notes and manual click notes
+            active_note_numbers = set(self.active_notes.keys())  # MIDI notes
+            active_note_numbers.update(self.piano_widget.manual_notes)  # Manual click notes
 
-        if not active_note_numbers:
+            if not active_note_numbers:
+                self.current_chord = None
+                if CHORD_DETECTOR_AVAILABLE:
+                    self.chord_label.set_chord(None)
+                if self.chord_window:
+                    self.chord_window.chord_label.set_chord(None)
+                return
+
+            # Detect chord with error handling
+            chord = self.chord_detector.detect_chord(active_note_numbers)
+            self.current_chord = chord
+
+            # Update displays
+            if CHORD_DETECTOR_AVAILABLE and not self.chord_window_detached:
+                self.chord_label.set_chord(chord)
+            if self.chord_window:
+                self.chord_window.chord_label.set_chord(chord)
+        except Exception as e:
+            # Log error but don't crash
+            print(f"Error in chord detection: {e}")
+            import traceback
+            traceback.print_exc()
+            # Clear chord display on error
             self.current_chord = None
             if CHORD_DETECTOR_AVAILABLE:
                 self.chord_label.set_chord(None)
             if self.chord_window:
                 self.chord_window.chord_label.set_chord(None)
-            return
-        
-        # Detect chord
-        chord = self.chord_detector.detect_chord(active_note_numbers)
-        self.current_chord = chord
-        
-        # Update displays
-        if CHORD_DETECTOR_AVAILABLE and not self.chord_window_detached:
-            self.chord_label.set_chord(chord)
-        if self.chord_window:
-            self.chord_window.chord_label.set_chord(chord)
     
     def contextMenuEvent(self, event):
         """Handle context menu"""
@@ -1877,6 +1927,13 @@ class MIDIMonitor(QMainWindow):
         self._borderless_mode = False
         self.chord_window_detached = False
         self._detached_chord_height = 50
+        self._click_enabled = False  # Key toggle is OFF by default
+        
+        # Reset key toggle to off
+        if hasattr(self, 'piano_widget'):
+            self.piano_widget.click_enabled = False
+            self.piano_widget.manual_notes.clear()
+            self.piano_widget.update()
         
         # Apply borderless mode change (will be False after reset)
         self._apply_borderless_mode()
@@ -1902,11 +1959,25 @@ class MIDIMonitor(QMainWindow):
     
     def closeEvent(self, event):
         """Handle window close"""
+        # Stop MIDI thread
         self.midi_thread_running = False
+
+        # Stop all timers
+        if hasattr(self, 'update_timer'):
+            self.update_timer.stop()
+        if hasattr(self, 'chord_timer'):
+            self.chord_timer.stop()
+        if hasattr(self, '_chord_width_update_timer'):
+            self._chord_width_update_timer.stop()
+
+        # Close MIDI port
         if self.inport:
             self.inport.close()
+
+        # Close chord window
         if self.chord_window:
             self.chord_window.close()
+
         event.accept()
 
 
@@ -1917,15 +1988,18 @@ class SingleApplication(QApplication):
         super().__init__(*args, **kwargs)
         self._appid = appid
         self._shared_memory = QSharedMemory(appid)
-        
-        # Try to create shared memory - if it exists, another instance is running
+        self._created_shared_memory = False  # Track if we created it
+
+        # Try to attach to existing shared memory first
         if self._shared_memory.attach():
             # Another instance exists
             self._is_running = True
+            self._shared_memory.detach()  # Detach immediately, we don't need it
         else:
             # First instance - create shared memory
             if self._shared_memory.create(1):
                 self._is_running = False
+                self._created_shared_memory = True  # We created it, so we must delete it
             else:
                 # Failed to create - assume another instance exists
                 self._is_running = True
@@ -1933,11 +2007,18 @@ class SingleApplication(QApplication):
     def is_running(self):
         """Check if another instance is already running"""
         return self._is_running
-    
+
+    def __del__(self):
+        """Destructor to ensure shared memory is cleaned up"""
+        self.cleanup()
+
     def cleanup(self):
         """Clean up shared memory"""
-        if self._shared_memory.isAttached():
-            self._shared_memory.detach()
+        # Only cleanup if we created the shared memory
+        if hasattr(self, '_created_shared_memory') and self._created_shared_memory:
+            if hasattr(self, '_shared_memory'):
+                if self._shared_memory.isAttached():
+                    self._shared_memory.detach()
 
 
 def main():
@@ -1950,7 +2031,7 @@ def main():
     parser.add_argument('-l', '--list', action='store_true', help='List available MIDI ports')
     
     args = parser.parse_args()
-    
+
     # List ports if requested
     if args.list:
         mido, _ = check_dependencies()
@@ -1962,18 +2043,22 @@ def main():
         else:
             print("  No MIDI input ports found!")
         return
-    
-    # Create application with single-instance support
-    app = SingleApplication("ivory-midi-monitor", sys.argv)
+
+    # Fork the process to detach from terminal
+    # This allows closing the terminal without killing Ivory
+    if os.fork() > 0:
+        # Parent process - exit immediately
+        sys.exit(0)
+
+    # Child process continues
+    # Redirect stdout/stderr to /dev/null
+    sys.stdout = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, 'w')
+
+    # Create application (removed single-instance check - it was causing issues)
+    app = QApplication(sys.argv)
     app.setApplicationName("Ivory")
     app.setOrganizationName("Ivory")
-    
-    # Check if another instance is running
-    if app.is_running():
-        QMessageBox.warning(None, "Ivory Already Running", 
-                           "Ivory is already running.\n\n"
-                           "Only one instance can run at a time.")
-        sys.exit(0)
     
     # Try to set application icon if available
     # Handle both development and PyInstaller bundle paths
@@ -2001,10 +2086,7 @@ def main():
     
     # Run event loop
     exit_code = app.exec_()
-    
-    # Cleanup
-    app.cleanup()
-    
+
     sys.exit(exit_code)
 
 

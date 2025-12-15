@@ -17,38 +17,42 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            artifact_name: ivory_1.0.1_all.deb
+            artifact_name: ivory_1.0.13_all.deb
             build_command: |
               mkdir -p dist
-              if [ -f "ivory_1.0.1_all.deb" ]; then
-                cp ivory_1.0.1_all.deb dist/
+              if [ -f "ivory_1.0.13_all.deb" ]; then
+                cp ivory_1.0.13_all.deb dist/
               else
-                dpkg-deb --build ivory_1.0.1_all
-                mv ivory_1.0.1_all.deb dist/
+                dpkg-deb --build ivory_1.0.13_all
+                mv ivory_1.0.13_all.deb dist/
               fi
 
           - os: windows-latest
             platform: windows
-            artifact_name: Ivory-Windows-v1.0.1.exe
+            artifact_name: Ivory-Windows-v1.0.13.exe
             build_command: |
               pip install -r build_scripts/requirements.txt
               cd build_scripts
               pyinstaller build_windows.spec
               cd ..
               mkdir -p dist
-              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v1.0.1.exe
+              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v1.0.13.exe
 
           - os: macos-latest
             platform: macos
-            artifact_name: Ivory-macOS-v1.0.1.zip
+            artifact_name: Ivory-macOS-v1.0.13.zip
             build_command: |
               pip install -r build_scripts/requirements.txt
+              # Convert iconset to icns if needed
+              if [ -d "screenshots/icon.iconset" ] && [ ! -f "screenshots/icon.icns" ]; then
+                iconutil -c icns screenshots/icon.iconset -o screenshots/icon.icns
+              fi
               cd build_scripts
               pyinstaller build_macos.spec
               cd ..
               mkdir -p dist
               cd build_scripts/dist
-              zip -r ../../dist/Ivory-macOS-v1.0.1.zip Ivory.app
+              zip -r ../../dist/Ivory-macOS-v1.0.13.zip Ivory.app
               cd ../..
 
     steps:

@@ -65,8 +65,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'Ivory',
         'CFBundleDisplayName': 'Ivory',
-        'CFBundleVersion': '1.0.1',
-        'CFBundleShortVersionString': '1.0.1',
+        'CFBundleVersion': '1.0.13',
+        'CFBundleShortVersionString': '1.0.13',
         'NSHighResolutionCapable': 'True',
     },
 )
