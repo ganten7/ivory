@@ -1,4 +1,4 @@
-name: Create Release
+name: Build and Release
 
 on:
   push:
@@ -9,50 +9,101 @@ permissions:
   contents: write
 
 jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: ivory_1.0.1_all.deb
+            build_command: |
+              sudo apt-get update
+              sudo apt-get install -y dpkg-deb
+              mkdir -p dist
+              dpkg-deb --build ivory_1.0.1_all
+              mv ivory_1.0.1_all.deb dist/
+
+          - os: windows-latest
+            platform: windows
+            artifact_name: Ivory-Windows-v1.0.1.exe
+            build_command: |
+              pip install -r build_scripts/requirements.txt
+              cd build_scripts
+              pyinstaller build_windows.spec
+              cd ..
+              mkdir -p dist
+              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v1.0.1.exe
+
+          - os: macos-latest
+            platform: macos
+            artifact_name: Ivory-macOS-v1.0.1.zip
+            build_command: |
+              pip install -r build_scripts/requirements.txt
+              cd build_scripts
+              pyinstaller build_macos.spec
+              cd ..
+              mkdir -p dist
+              cd build_scripts/dist
+              zip -r ../../dist/Ivory-macOS-v1.0.1.zip Ivory.app
+              cd ../..
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r build_scripts/requirements.txt
+
+      - name: Build for ${{ matrix.platform }}
+        run: ${{ matrix.build_command }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.platform }}-build
+          path: dist/${{ matrix.artifact_name }}
+
   release:
     name: Create Release
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Move artifacts to dist
+        run: |
+          mkdir -p dist
+          find artifacts -type f \( -name "*.deb" -o -name "*.exe" -o -name "*.zip" \) -exec mv {} dist/ \;
+
       - name: Get version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Check if .deb package exists
-        id: check_deb
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          VERSION_NUM="${VERSION#v}"
-          DEB_FILE="ivory_${VERSION_NUM}_all.deb"
-          if [ -f "$DEB_FILE" ]; then
-            echo "DEB_EXISTS=true" >> $GITHUB_OUTPUT
-            echo "DEB_FILE=$DEB_FILE" >> $GITHUB_OUTPUT
-          else
-            echo "DEB_EXISTS=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Read release notes
-        id: release_notes
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          if [ -f "RELEASE_${VERSION}.md" ]; then
-            echo "NOTES_FILE=RELEASE_${VERSION}.md" >> $GITHUB_OUTPUT
-          else
-            echo "NOTES_FILE=README.md" >> $GITHUB_OUTPUT
-          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           name: Ivory ${{ steps.get_version.outputs.VERSION }}
-          body_path: ${{ steps.release_notes.outputs.NOTES_FILE }}
+          body_path: RELEASE_${{ steps.get_version.outputs.VERSION }}.md
           draft: false
           prerelease: false
           files: |
-            ${{ steps.check_deb.outputs.DEB_FILE }}
+            dist/*
             screenshots/*.png
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

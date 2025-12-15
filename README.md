@@ -66,10 +66,23 @@ Ivory features an enhanced chord detection algorithm with better accuracy, impro
 
 ### Download
 
-Download the latest release:
-- **[ivory_1.0.1_all.deb](https://github.com/ganten/ivory/releases/download/v1.0.1/ivory_1.0.1_all.deb)** (Debian/Ubuntu)
+Download for your platform:
+- **Windows**: [Ivory-Windows-v1.0.1.exe](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-Windows-v1.0.1.exe)
+- **macOS**: [Ivory-macOS-v1.0.1.zip](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-macOS-v1.0.1.zip)
+- **Linux**: [ivory_1.0.1_all.deb](https://github.com/ganten/ivory/releases/download/v1.0.1/ivory_1.0.1_all.deb)
 
-### Install on Debian/Ubuntu
+### Windows
+
+1. Download the .exe file
+2. Double-click to run (portable, no install needed)
+
+### macOS
+
+1. Download and extract the .zip file
+2. Drag Ivory.app to Applications
+3. Right-click and "Open" first time
+
+### Linux (Debian/Ubuntu)
 
 ```bash
 # Remove old version if installed

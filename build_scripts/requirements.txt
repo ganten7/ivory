@@ -1,0 +1,4 @@
+PyQt5>=5.15.0
+mido>=1.2.10
+python-rtmidi>=1.4.9
+pyinstaller>=5.0

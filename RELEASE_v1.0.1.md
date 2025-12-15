@@ -66,10 +66,31 @@
 
 ### Download
 
-Download the Debian package:
-- **ivory_1.0.1_all.deb** (for Debian/Ubuntu-based distributions)
+Download the latest release for your platform:
+- **Windows**: [Ivory-Windows-v1.0.1.exe](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-Windows-v1.0.1.exe)
+- **macOS**: [Ivory-macOS-v1.0.1.zip](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-macOS-v1.0.1.zip)
+- **Linux**: [ivory_1.0.1_all.deb](https://github.com/ganten/ivory/releases/download/v1.0.1/ivory_1.0.1_all.deb) (Debian/Ubuntu)
 
-### Install
+### Install on Windows
+
+1. Download **Ivory-Windows-v1.0.1.exe**
+2. Double-click the .exe file to run Ivory
+3. No installation needed - it's a portable executable!
+4. Windows may show a SmartScreen warning - click "More info" then "Run anyway"
+
+**Note**: You'll need a MIDI keyboard connected, or you can use the click-to-toggle feature (right-click menu).
+
+### Install on macOS
+
+1. Download **Ivory-macOS-v1.0.1.zip**
+2. Extract the .zip file
+3. Drag **Ivory.app** to your Applications folder
+4. Right-click the app and select "Open" the first time (due to macOS Gatekeeper)
+5. Grant microphone/accessibility permissions if prompted
+
+**Note**: You'll need a MIDI keyboard connected, or you can use the click-to-toggle feature (right-click menu).
+
+### Install on Linux (Debian/Ubuntu)
 
 ```bash
 # Remove old version if installed
