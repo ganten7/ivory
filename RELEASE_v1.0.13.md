@@ -1,5 +1,18 @@
 # Ivory v1.0.13 Release Notes
 
+## Screenshots
+
+### Cm11 - Minor 11th Chord Detection
+![Cm11 Chord](https://raw.githubusercontent.com/ganten7/ivory/master/screenshots/Cm11.png)
+
+### D7(b9,#11) - Complex Altered Dominant
+![D7(b9,#11) Chord](https://raw.githubusercontent.com/ganten7/ivory/master/screenshots/D7-b9-11.png)
+
+### Ebm11 - Extended Minor Chord
+![Ebm11 Chord](https://raw.githubusercontent.com/ganten7/ivory/master/screenshots/Ebm11.png)
+
+---
+
 ## What's New
 
 ### Bug Fixes
@@ -43,6 +56,7 @@ Download `Ivory-macOS-v1.0.13.zip`, extract, and run `Ivory.app`.
 ## Full Changelog
 
 ### Version 1.0.13
+- **Fixed scale detection**: Modes of Major, Melodic Minor, and Harmonic Minor now detect correctly (e.g., F Ionian)
 - Fixed altered dominant filtering with M3+m3 conflicts
 - Improved add9 slash chord simplification logic
 - All 11 test cases passing (100%)
@@ -58,5 +72,6 @@ None at this time.
 
 ## Credits
 Ivory Development Team
+
 
 
