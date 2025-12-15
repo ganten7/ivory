@@ -584,40 +584,55 @@ class ChordDetector:
         # Convert to pitch classes
         pitch_classes_all = sorted(set(note % 12 for note in active_notes))
 
-        # IMPROVED SCALE DETECTION LOGIC (v2.0):
+        # IMPROVED SCALE DETECTION LOGIC (v2.1):
         # Check for scales when:
-        # 1. Notes span at least one octave (>= 12 semitones) from lowest to highest, AND
-        # 2. Notes are connected via steps/half-steps (clustered pattern), AND
-        # 3. We have 5+ unique pitch classes
-        # This prioritizes scale detection for stepwise patterns with octave+ span
+        # 1. We have 5+ unique pitch classes
+        # 2. Notes are stepwise (clustered pattern - no skips)
+        # 3. Notes span at least a 7th (11 semitones for major 7th, 10 for minor 7th)
+        # 4. All scale degrees are present (exact match with scale pattern)
+        # This prioritizes scale detection for stepwise patterns that form complete scales
         should_check_scale_later = False
         chord_span_early = max(active_notes) - min(active_notes)
+        lowest_note = min(active_notes)
+        lowest_pc = lowest_note % 12
+        
         if len(pitch_classes_all) >= 5:
-            # Check if notes span at least one octave AND are clustered (stepwise)
-            if chord_span_early >= 12 and self.is_clustered(active_notes):
+            # Check if notes are stepwise (clustered) - no skips in scale degrees
+            is_stepwise = self.is_clustered(active_notes)
+            
+            # Check if it spans at least a 7th (10 semitones = minor 7th, 11 = major 7th)
+            spans_seventh = chord_span_early >= 10
+            
+            # For modes of Major, Melodic Minor, or Harmonic Minor:
+            # - Must be stepwise (no skips)
+            # - Must span at least a 7th
+            # - Must have all notes of the scale (will be checked in detect_scale)
+            if is_stepwise and spans_seventh:
                 should_check_scale_later = True
-            # Also check for scales within one octave if highly clustered (backwards compat)
-            elif chord_span_early < 12 and self.is_clustered(active_notes):
+            # Also check for scales spanning an octave or more (backwards compat)
+            elif chord_span_early >= 12 and is_stepwise:
                 should_check_scale_later = True
 
-        # If we have 7 unique pitch classes (and not clustered), check if it's a 13th chord
-        if len(pitch_classes_all) == 7:
-            lowest_note = min(active_notes)
-            lowest_pc = lowest_note % 12
-
-            # Check if the lowest note forms a chord with 3rd and 7th
-            # (13th chords have 3rd + 7th + extensions)
-            intervals_from_lowest = set((pc - lowest_pc) % 12 for pc in pitch_classes_all)
-            has_third = (3 in intervals_from_lowest or 4 in intervals_from_lowest)
-            has_seventh = (10 in intervals_from_lowest or 11 in intervals_from_lowest)
-
-            # If lowest note doesn't form a chord, try scale detection as fallback
-            if not (has_third and has_seventh):
-                scale = self.detect_scale(active_notes)
-                if scale and scale.startswith(self.get_note_name(lowest_pc)):
-                    return scale
-            # If lowest note DOES form a chord (3rd+7th), continue with chord detection
-            # (13th chords will be detected below)
+        # EARLY SCALE DETECTION for 7-note patterns (modes):
+        # If we have exactly 7 unique pitch classes and it's stepwise, check for scale FIRST
+        # This prevents 13th chord detection from overriding scale detection
+        if len(pitch_classes_all) == 7 and should_check_scale_later:
+            # Try scale detection early - if it matches a mode, return it immediately
+            scale = self.detect_scale(active_notes)
+            if scale:
+                # Verify it's a mode of Major, Melodic Minor, or Harmonic Minor
+                scale_name = scale.split(' ', 1)[1] if ' ' in scale else ''
+                major_modes = {'Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Aeolian', 'Locrian'}
+                melodic_minor_modes = {'Melodic Minor', 'Dorian b2', 'Lydian Augmented', 'Lydian Dominant',
+                                      'Mixolydian b6', 'Locrian #2', 'Altered'}
+                harmonic_minor_modes = {'Harmonic Minor', 'Locrian #6', 'Ionian #5', 'Dorian #4',
+                                       'Phrygian Dominant', 'Lydian #2', 'Altered Diminished'}
+                
+                if scale_name in major_modes or scale_name in melodic_minor_modes or scale_name in harmonic_minor_modes:
+                    # Verify it starts with the lowest note (tonic)
+                    detected_root = scale.split(' ', 1)[0] if ' ' in scale else ''
+                    if detected_root == self.get_note_name(lowest_pc):
+                        return scale  # Return scale immediately, don't check for chords
 
 
         # Try chord detection
