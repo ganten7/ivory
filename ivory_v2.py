@@ -602,13 +602,17 @@ class MIDIMonitor(QMainWindow):
         # Settings - use platform-specific config directory
         self.config_file = get_config_dir() / "settings.json"
         self.load_settings()
-        
+
         # Update chord detector preferences
         if self.chord_detector:
             self.chord_detector.set_note_preference(self.prefer_flats)
-        
+
         # Initialize UI
         self.init_ui()
+
+        # Apply click_enabled setting after piano_widget is created
+        if hasattr(self, 'piano_widget') and hasattr(self, '_click_enabled'):
+            self.piano_widget.click_enabled = self._click_enabled
         
         # Connect MIDI
         self.connect_midi()
@@ -661,7 +665,7 @@ class MIDIMonitor(QMainWindow):
                     self._borderless_mode = config.get("borderless_mode", defaults["borderless_mode"])
                     self.chord_window_detached = config.get("chord_window_detached", defaults["chord_window_detached"])
                     self._detached_chord_height = config.get("detached_chord_height", defaults["detached_chord_height"])
-                    self.piano.click_enabled = config.get("click_enabled", defaults["click_enabled"])
+                    self._click_enabled = config.get("click_enabled", defaults["click_enabled"])
                     self.show_no_midi_warning = config.get("show_no_midi_warning", defaults["show_no_midi_warning"])
             except Exception:
                 # Use defaults on error
@@ -677,7 +681,7 @@ class MIDIMonitor(QMainWindow):
                 self._borderless_mode = defaults["borderless_mode"]
                 self.chord_window_detached = defaults["chord_window_detached"]
                 self._detached_chord_height = defaults["detached_chord_height"]
-                self.piano.click_enabled = defaults["click_enabled"]
+                self._click_enabled = defaults["click_enabled"]
                 self.show_no_midi_warning = defaults["show_no_midi_warning"]
         else:
             # Use defaults
@@ -693,7 +697,7 @@ class MIDIMonitor(QMainWindow):
             self._borderless_mode = defaults["borderless_mode"]
             self.chord_window_detached = defaults["chord_window_detached"]
             self._detached_chord_height = defaults["detached_chord_height"]
-            self.piano.click_enabled = defaults["click_enabled"]
+            self._click_enabled = defaults["click_enabled"]
             self.show_no_midi_warning = defaults["show_no_midi_warning"]
     
     def save_settings(self):
@@ -711,7 +715,7 @@ class MIDIMonitor(QMainWindow):
             "borderless_mode": getattr(self, '_borderless_mode', False),
             "chord_window_detached": getattr(self, 'chord_window_detached', False),
             "detached_chord_height": getattr(self, '_detached_chord_height', 50),
-            "click_enabled": self.piano.click_enabled,
+            "click_enabled": getattr(self.piano_widget, 'click_enabled', True) if hasattr(self, 'piano_widget') else True,
             "show_no_midi_warning": self.show_no_midi_warning
         }
         
@@ -1291,7 +1295,7 @@ class MIDIMonitor(QMainWindow):
             # Key click toggle (only in windowed mode, not borderless)
             if not self._borderless_mode:
                 menu.addAction(
-                    "Disable Key Toggle" if self.piano.click_enabled else "Enable Key Toggle",
+                    "Disable Key Toggle" if self.piano_widget.click_enabled else "Enable Key Toggle",
                     self.toggle_key_clicks
                 )
             menu.addSeparator()
@@ -1451,7 +1455,7 @@ class MIDIMonitor(QMainWindow):
 
     def toggle_key_clicks(self):
         """Toggle clickable keys on/off"""
-        self.piano.click_enabled = not self.piano.click_enabled
+        self.piano_widget.click_enabled = not self.piano_widget.click_enabled
         self.save_settings()
     
     def toggle_chord_window(self):
@@ -1686,7 +1690,7 @@ class MIDIMonitor(QMainWindow):
 
         # Disable key clicking in borderless mode (interferes with window dragging)
         if self._borderless_mode:
-            self.piano.click_enabled = False
+            self.piano_widget.click_enabled = False
 
         self._apply_borderless_mode()
         self.save_settings()
