@@ -567,25 +567,37 @@ class ChordLabelWidget(QWidget):
                 # Process character by character
                 for i, char in enumerate(display_chord):
                     if char == '°':
-                        # Calculate proper spacing: use average character width for centering
-                        symbol_width = avg_char_width  # Allocate full character width for symbol
+                        # Use width of a digit (like '7') for symbol spacing - ensures consistent width
+                        symbol_width = metrics.boundingRect('7').width()
+                        # Add proper spacing before symbol - use a fraction of character width
+                        space_before = max(2, symbol_width // 4)  # At least 2px, or 1/4 of symbol width
+                        current_x += space_before
+                        
                         circle_size = max(4, int(font_size * 0.35))
                         circle_y = int(text_y - metrics.ascent() * 0.7)
-                        circle_x = current_x + (symbol_width - circle_size) // 2  # Center circle in allocated space
+                        # Center circle in remaining symbol width (after space)
+                        remaining_width = symbol_width - space_before
+                        circle_x = current_x + (remaining_width - circle_size) // 2
                         
                         # Draw ° as a small circle
                         painter.setPen(QPen(QColor(232, 220, 192), 1.5))
                         painter.setBrush(Qt.NoBrush)
                         painter.drawEllipse(circle_x, circle_y, circle_size, circle_size)
 
-                        # Move past symbol with proper spacing
-                        current_x += symbol_width
+                        # Move past symbol - use full allocated width
+                        current_x += remaining_width
                     elif char == 'ø':
-                        # Calculate proper spacing: use average character width for centering
-                        symbol_width = avg_char_width  # Allocate full character width for symbol
+                        # Use width of a digit (like '7') for symbol spacing - ensures consistent width
+                        symbol_width = metrics.boundingRect('7').width()
+                        # Add proper spacing before symbol - use a fraction of character width
+                        space_before = max(2, symbol_width // 4)  # At least 2px, or 1/4 of symbol width
+                        current_x += space_before
+                        
                         circle_size = max(6, int(font_size * 0.45))
                         circle_y = int(text_y - metrics.ascent() * 0.4)
-                        circle_x = current_x + (symbol_width - circle_size) // 2  # Center circle in allocated space
+                        # Center circle in remaining symbol width (after space)
+                        remaining_width = symbol_width - space_before
+                        circle_x = current_x + (remaining_width - circle_size) // 2
                         
                         # Draw ø as a circle with a diagonal line
                         painter.setPen(QPen(QColor(232, 220, 192), 1.5))
@@ -595,8 +607,8 @@ class ChordLabelWidget(QWidget):
                         painter.drawLine(circle_x, circle_y + circle_size,
                                        circle_x + circle_size, circle_y)
 
-                        # Move past symbol with proper spacing
-                        current_x += symbol_width
+                        # Move past symbol - use full allocated width
+                        current_x += remaining_width
                     else:
                         # Draw regular character
                         painter.drawText(current_x, int(text_y), char)
