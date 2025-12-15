@@ -8,6 +8,9 @@ Thank you to everyone who has contributed to Ivory!
   - GitHub: [@ganten7](https://github.com/ganten7)
   - Contributions: Core development, chord detection algorithms, cross-platform builds, packaging
 
+- **Cursor** - AI coding assistant
+  - Contributions: Workflow automation, build system improvements, documentation, packaging fixes, cross-platform support
+
 ## Acknowledgments
 
 Special thanks to:
