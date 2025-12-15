@@ -157,7 +157,7 @@ class PianoWidget(QWidget):
 
         # Manual click mode - for testing without MIDI keyboard
         self.manual_notes: Set[int] = set()  # Notes toggled by mouse clicks
-        self.click_enabled = True  # Enable click-to-toggle
+        self.click_enabled = False  # Enable click-to-toggle (disabled by default)
 
         # Color settings
         self.dark_mode = False
@@ -370,6 +370,10 @@ class PianoWidget(QWidget):
     def mousePressEvent(self, event: QMouseEvent):
         """Handle mouse clicks to toggle notes"""
         if not self.click_enabled:
+            return
+
+        # Only respond to left clicks
+        if event.button() != Qt.LeftButton:
             return
 
         # Get click position
@@ -645,7 +649,7 @@ class MIDIMonitor(QMainWindow):
             "borderless_mode": False,
             "chord_window_detached": False,
             "detached_chord_height": 50,
-            "click_enabled": True,
+            "click_enabled": False,
             "show_no_midi_warning": True
         }
         
@@ -1456,6 +1460,10 @@ class MIDIMonitor(QMainWindow):
     def toggle_key_clicks(self):
         """Toggle clickable keys on/off"""
         self.piano_widget.click_enabled = not self.piano_widget.click_enabled
+        # Clear all manually toggled keys when disabling
+        if not self.piano_widget.click_enabled:
+            self.piano_widget.manual_notes.clear()
+            self.piano_widget.update()
         self.save_settings()
     
     def toggle_chord_window(self):
