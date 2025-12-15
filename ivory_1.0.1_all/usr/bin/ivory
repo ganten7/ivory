@@ -91,6 +91,21 @@ def is_black_key(note_number: int) -> bool:
     """Check if a MIDI note is a black key"""
     return not is_white_key(note_number)
 
+def get_config_dir() -> Path:
+    """Get platform-specific config directory"""
+    if sys.platform == "win32":
+        # Windows: %APPDATA%\ivory
+        appdata = os.getenv('APPDATA')
+        if appdata:
+            return Path(appdata) / "ivory"
+        return Path.home() / "AppData" / "Roaming" / "ivory"
+    elif sys.platform == "darwin":
+        # macOS: ~/Library/Application Support/ivory
+        return Path.home() / "Library" / "Application Support" / "ivory"
+    else:
+        # Linux and others: ~/.config/ivory
+        return Path.home() / ".config" / "ivory"
+
 def get_white_key_position(note_number: int) -> int:
     """Get position of white key in 88-key layout (0-51 for white keys)"""
     if not is_white_key(note_number):
@@ -584,8 +599,8 @@ class MIDIMonitor(QMainWindow):
         else:
             self.chord_detector = None
         
-        # Settings
-        self.config_file = Path.home() / ".config" / "ivory" / "settings.json"
+        # Settings - use platform-specific config directory
+        self.config_file = get_config_dir() / "settings.json"
         self.load_settings()
         
         # Update chord detector preferences
