@@ -19,13 +19,21 @@ jobs:
             platform: linux
             artifact_name: ivory_1.0.13_all.deb
             build_command: |
-              mkdir -p dist
-              if [ -f "ivory_1.0.13_all.deb" ]; then
-                cp ivory_1.0.13_all.deb dist/
-              else
-                dpkg-deb --build ivory_1.0.13_all
-                mv ivory_1.0.13_all.deb dist/
+              # Install build tools
+              sudo apt-get update && sudo apt-get install -y dpkg-dev
+              # Ensure package structure exists
+              if [ ! -d "ivory_1.0.13_all" ]; then
+                echo "Error: ivory_1.0.13_all directory not found in repo"
+                exit 1
               fi
+              # Copy source files to package
+              cp ivory_v2.py ivory_1.0.13_all/usr/bin/ivory
+              cp chord_detector_v2.py ivory_1.0.13_all/usr/bin/chord_detector_v2.py
+              chmod +x ivory_1.0.13_all/usr/bin/ivory
+              # Build package
+              dpkg-deb --build ivory_1.0.13_all
+              mkdir -p dist
+              mv ivory_1.0.13_all.deb dist/
 
           - os: windows-latest
             platform: windows

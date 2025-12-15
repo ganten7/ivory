@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.ivory.app</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Proprietary</project_license>
+  <name>Ivory</name>
+  <summary>MIDI Keyboard Monitor with Advanced Chord Detection</summary>
+  <icon type="stock">ivory</icon>
+  <description>
+    <p>Ivory is a real-time MIDI keyboard monitor and chord detection application designed for musicians, composers, and music enthusiasts.</p>
+    <p>Features:</p>
+    <ul>
+      <li>Real-time visualization of 88-key piano keyboard</li>
+      <li>Advanced jazz chord detection with 100+ chord patterns</li>
+      <li>MIDI input support with sustain pedal</li>
+      <li>Click-to-toggle notes (windowed mode only)</li>
+      <li>Friendly MIDI device detection</li>
+      <li>Dark/light mode themes</li>
+      <li>Customizable colors</li>
+      <li>Borderless and detachable chord window modes</li>
+      <li>Cross-platform (Linux, Windows, macOS)</li>
+    </ul>
+    <p>Perfect for jazz musicians, composers, and anyone who wants to understand the harmonic structure of their playing in real-time.</p>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/ganten7/ivory/main/screenshots/Cm11.png</image>
+      <caption>Ivory detecting a Cm11 chord</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/ganten7/ivory/main/screenshots/D7-b9-11.png</image>
+      <caption>Ivory detecting an altered dominant chord D7(b9,#11)</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/ganten7/ivory/main/screenshots/Ebm11.png</image>
+      <caption>Ivory detecting an Ebm11 chord</caption>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://github.com/ganten7/ivory</url>
+  <developer_name>Ivory Development Team</developer_name>
+  <update_contact>your-email@example.com</update_contact>
+  <provides>
+    <binary>ivory</binary>
+  </provides>
+  <launchable type="desktop-id">ivory.desktop</launchable>
+  <releases>
+    <release version="1.0.13" date="2024-12-15">
+      <description>
+        <p>Version 1.0.13 fixes:</p>
+        <ul>
+          <li>Fixed altered dominant filtering with M3+m3 conflicts</li>
+          <li>Improved add9 slash chord simplification logic</li>
+          <li>All 11 test cases passing (100%)</li>
+          <li>Full transposability in all 12 keys</li>
+          <li>Altered dominants correctly filtered when detected from non-bass roots</li>
+          <li>Add9 notation preserved only when 9th is doubled in slash chords</li>
+          <li>Keytoggle now defaults to OFF</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+  <categories>
+    <category>Audio</category>
+    <category>Music</category>
+  </categories>
+  <keywords>
+    <keyword>midi</keyword>
+    <keyword>piano</keyword>
+    <keyword>keyboard</keyword>
+    <keyword>chord</keyword>
+    <keyword>music</keyword>
+    <keyword>detection</keyword>
+    <keyword>jazz</keyword>
+    <keyword>harmony</keyword>
+  </keywords>
+</component>
+
