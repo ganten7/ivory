@@ -377,6 +377,22 @@ test_cases = [
 
 ---
 
+## Release Requirements (v1.1+)
+
+### GNOME Software Center Metadata
+- **Screenshots must display in GNOME Software Center**
+  - Screenshots must be included in `ivory.metainfo.xml` with proper HTTPS URLs
+  - Use GitHub raw URLs for screenshots: `https://raw.githubusercontent.com/ganten/ivory/master/screenshots/[filename].png`
+  - Required screenshots: Cm11.png, D7-b9-11.png, Ebm11.png
+  - Status: ✅ Fixed in build script
+
+### About Dialog Version Display
+- **Version number must be displayed in bottom left of About dialog**
+  - Format: "v1.1" (with "v" prefix)
+  - Position: Bottom left corner of About dialog
+  - Must update automatically when version changes
+  - Status: ✅ Fixed in `ivory_v2.py`
+
 ## Notes
 
 - These issues primarily involve:

@@ -4,6 +4,8 @@ Ivory - MIDI Keyboard Monitor with Chord Detection
 Cross-platform application built with PyQt5
 """
 
+__version__ = "1.1"
+
 import sys
 import time
 import argparse
@@ -1906,10 +1908,33 @@ class MIDIMonitor(QMainWindow):
         link_label.setOpenExternalLinks(True)
         layout.addWidget(link_label)
         
+        # Add spacer to push version and button to bottom
+        layout.addStretch()
+        
+        # Create horizontal layout for bottom section (version on left, button on right)
+        bottom_layout = QHBoxLayout()
+        
+        # Add version label in bottom left
+        version_label = QLabel(f"v{__version__}")
+        version_font = QFont("Courier New", 8)
+        if not version_font.exactMatch():
+            version_font = QFont("Courier", 8)
+        if not version_font.exactMatch():
+            version_font = QFont("monospace", 8)
+        version_label.setFont(version_font)
+        version_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        bottom_layout.addWidget(version_label)
+        
+        # Add spacer to push button to right
+        bottom_layout.addStretch()
+        
         # Add close button
         buttons = QDialogButtonBox(QDialogButtonBox.Ok)
         buttons.accepted.connect(dialog.accept)
-        layout.addWidget(buttons)
+        bottom_layout.addWidget(buttons)
+        
+        # Add bottom layout to main layout
+        layout.addLayout(bottom_layout)
         
         dialog.exec_()
     

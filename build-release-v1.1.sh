@@ -129,6 +129,20 @@ cat > "${DEB_BUILD_DIR}/usr/share/metainfo/ivory.metainfo.xml" << EOF
     </ul>
     <p>Version ${VERSION} includes fixes for interval detection, scale detection, and extended chords.</p>
   </description>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/ganten/ivory/master/screenshots/Cm11.png</image>
+      <caption>Ivory detecting a Cm11 chord</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/ganten/ivory/master/screenshots/D7-b9-11.png</image>
+      <caption>Ivory detecting an altered dominant chord D7(b9,#11)</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/ganten/ivory/master/screenshots/Ebm11.png</image>
+      <caption>Ivory detecting an Ebm11 chord</caption>
+    </screenshot>
+  </screenshots>
   <launchable type="desktop-id">ivory.desktop</launchable>
   <provides>
     <binary>ivory</binary>
@@ -147,6 +161,20 @@ cat > "${DEB_BUILD_DIR}/usr/share/metainfo/ivory.metainfo.xml" << EOF
       </description>
     </release>
   </releases>
+  <categories>
+    <category>Audio</category>
+    <category>Music</category>
+  </categories>
+  <keywords>
+    <keyword>midi</keyword>
+    <keyword>piano</keyword>
+    <keyword>keyboard</keyword>
+    <keyword>chord</keyword>
+    <keyword>music</keyword>
+    <keyword>detection</keyword>
+    <keyword>jazz</keyword>
+    <keyword>harmony</keyword>
+  </keywords>
 </component>
 EOF
 
