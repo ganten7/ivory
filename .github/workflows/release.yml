@@ -18,9 +18,10 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             build_command: |
-              VERSION="${GITHUB_REF#refs/tags/v}"
               echo "Building Linux .deb for version $VERSION"
-              bash build-release-v1.1.sh
+              # Install dpkg-deb if needed
+              sudo apt-get update && sudo apt-get install -y dpkg-dev
+              VERSION=$VERSION bash build-release-v1.1.sh
               mkdir -p dist
               cp release-artifacts/ivory-linux/ivory_${VERSION}_all.deb dist/
 
