@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v*.*'
 
 permissions:
   contents: write
@@ -17,71 +17,50 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-            artifact_name: ivory_1.0.13_all.deb
             build_command: |
-              # Install build tools
-              sudo apt-get update && sudo apt-get install -y dpkg-dev
-              # Ensure package structure exists - create if missing
-              mkdir -p ivory_1.0.13_all/DEBIAN
-              mkdir -p ivory_1.0.13_all/usr/bin
-              mkdir -p ivory_1.0.13_all/usr/share/applications
-              mkdir -p ivory_1.0.13_all/usr/share/metainfo
-              mkdir -p ivory_1.0.13_all/usr/share/appdata
-              mkdir -p ivory_1.0.13_all/usr/share/icons/hicolor/{16x16,32x32,48x48,64x64,128x128}/apps
-              # Copy or create control file
-              if [ -f "ivory_1.0.13_all/DEBIAN/control" ]; then
-                echo "Using existing control file"
-              else
-                printf 'Package: ivory\nVersion: 1.0.13\nSection: sound\nPriority: optional\nArchitecture: all\nDepends: python3, python3-pyqt5, python3-mido, python3-rtmidi\nMaintainer: Ivory Development Team\nDescription: MIDI Keyboard Monitor with Advanced Chord Detection\n Ivory is a real-time MIDI keyboard monitor and chord detection application.\n' > ivory_1.0.13_all/DEBIAN/control
-              fi
-              # Copy source files to package
-              cp ivory_v2.py ivory_1.0.13_all/usr/bin/ivory
-              cp chord_detector_v2.py ivory_1.0.13_all/usr/bin/chord_detector_v2.py
-              chmod +x ivory_1.0.13_all/usr/bin/ivory
-              # Copy metadata files if they exist
-              [ -f "ivory_1.0.13_all/usr/share/applications/ivory.desktop" ] && cp ivory_1.0.13_all/usr/share/applications/ivory.desktop ivory_1.0.13_all/usr/share/applications/ || true
-              [ -f "ivory_1.0.13_all/usr/share/metainfo/ivory.metainfo.xml" ] && cp ivory_1.0.13_all/usr/share/metainfo/ivory.metainfo.xml ivory_1.0.13_all/usr/share/metainfo/ || true
-              [ -f "ivory_1.0.13_all/usr/share/appdata/ivory.appdata.xml" ] && cp ivory_1.0.13_all/usr/share/appdata/ivory.appdata.xml ivory_1.0.13_all/usr/share/appdata/ || true
-              # Copy icons if they exist, create from 128x128 if needed
-              if [ -f "ivory_1.0.13_all/usr/share/icons/hicolor/128x128/apps/ivory.png" ]; then
-                for size in 16 32 48 64; do
-                  if [ ! -f "ivory_1.0.13_all/usr/share/icons/hicolor/${size}x${size}/apps/ivory.png" ]; then
-                    python3 -c "from PIL import Image; img=Image.open('ivory_1.0.13_all/usr/share/icons/hicolor/128x128/apps/ivory.png'); img.resize((${size},${size})).save('ivory_1.0.13_all/usr/share/icons/hicolor/${size}x${size}/apps/ivory.png')" || true
-                  fi
-                done
-              fi
-              # Build package
-              dpkg-deb --build ivory_1.0.13_all
+              VERSION="${GITHUB_REF#refs/tags/v}"
+              echo "Building Linux .deb for version $VERSION"
+              bash build-release-v1.1.sh
               mkdir -p dist
-              mv ivory_1.0.13_all.deb dist/
+              cp release-artifacts/ivory-linux/ivory_${VERSION}_all.deb dist/
 
           - os: windows-latest
             platform: windows
-            artifact_name: Ivory-Windows-v1.0.13.exe
             build_command: |
+              echo "Building Windows .exe for version $VERSION"
               pip install -r build_scripts/requirements.txt
               cd build_scripts
-              pyinstaller build_windows.spec
+              pyinstaller --clean build_windows.spec
               cd ..
               mkdir -p dist
-              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v1.0.13.exe
+              if [ -f "build_scripts/dist/Ivory/Ivory.exe" ]; then
+                cp build_scripts/dist/Ivory/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
+              elif [ -f "build_scripts/dist/Ivory.exe" ]; then
+                cp build_scripts/dist/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
+              else
+                echo "Error: Could not find built executable"
+                ls -la build_scripts/dist/
+                exit 1
+              fi
 
           - os: macos-latest
             platform: macos
-            artifact_name: Ivory-macOS-v1.0.13.zip
             build_command: |
+              echo "Building macOS .zip for version $VERSION"
               pip install -r build_scripts/requirements.txt
-              # Convert iconset to icns if needed
-              if [ -d "screenshots/icon.iconset" ] && [ ! -f "screenshots/icon.icns" ]; then
-                iconutil -c icns screenshots/icon.iconset -o screenshots/icon.icns
-              fi
               cd build_scripts
-              pyinstaller build_macos.spec
+              pyinstaller --clean build_macos.spec
               cd ..
               mkdir -p dist
-              cd build_scripts/dist
-              zip -r ../../dist/Ivory-macOS-v1.0.13.zip Ivory.app
-              cd ../..
+              if [ -d "build_scripts/dist/Ivory.app" ]; then
+                cd build_scripts/dist
+                zip -r ../../dist/Ivory-macOS-v${VERSION}.zip Ivory.app
+                cd ../..
+              else
+                echo "Error: Could not find Ivory.app"
+                ls -la build_scripts/dist/
+                exit 1
+              fi
 
     steps:
       - name: Checkout code
@@ -97,14 +76,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r build_scripts/requirements.txt
 
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
       - name: Build for ${{ matrix.platform }}
         run: ${{ matrix.build_command }}
+        env:
+          VERSION: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-build
-          path: dist/${{ matrix.artifact_name }}
+          path: dist/*
 
   release:
     name: Create Release

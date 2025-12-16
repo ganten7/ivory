@@ -1,10 +1,10 @@
 #!/bin/bash
-# Build Ivory v1.1 for all platforms: Linux (.deb), Windows (.exe), macOS (.zip)
-# Version: 1.1
+# Build Ivory for all platforms: Linux (.deb), Windows (.exe), macOS (.zip)
+# Version can be set via VERSION environment variable, defaults to 1.1
 
 set -e
 
-VERSION="1.1"
+VERSION="${VERSION:-1.1}"
 RELEASE_DIR="release-artifacts"
 BUILD_DIR="build-release-v1.1"
 
