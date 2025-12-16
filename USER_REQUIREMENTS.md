@@ -393,6 +393,65 @@ test_cases = [
   - Must update automatically when version changes
   - Status: ✅ Fixed in `ivory_v2.py`
 
+### GitHub Actions Workflow & Cross-Platform Builds ✅ IMPLEMENTED
+- **Automated multi-platform builds via GitHub Actions**
+  - **Trigger:** Pushing a tag matching pattern `v*.*` (e.g., `v1.1`)
+  - **Platforms:** Linux (.deb), Windows (.exe), macOS (.zip/.app)
+  - **Build Process:**
+    - Linux: Uses `ubuntu-latest` runner, builds `.deb` package via `build-release-v1.1.sh`
+    - Windows: Uses `windows-latest` runner, builds `.exe` via PyInstaller
+    - macOS: Uses `macos-latest` runner, builds `.app` bundle via PyInstaller, zipped for distribution
+  - **Version Extraction:** Automatically extracts version from Git tag (e.g., `v1.1` → `1.1`)
+  - **Artifacts:** All builds uploaded as artifacts, then combined into a single GitHub Release
+  - **Status:** ✅ Implemented in `.github/workflows/release.yml`
+
+### Cross-Platform Compatibility Requirements ✅ IMPLEMENTED
+- **Windows Build Compatibility**
+  - **Issue:** Windows GitHub Actions runners use PowerShell by default, but build scripts use bash syntax
+  - **Solution:** Explicitly set `shell: bash` for all build steps (Windows runners include Git Bash)
+  - **Error Handling:** Improved error messages with fallback to Windows `dir` command for debugging
+  - **Status:** ✅ Fixed - Windows builds now use bash shell explicitly
+
+- **Linux Build Compatibility**
+  - **Requirements:** `dpkg-dev` package for building `.deb` files
+  - **Script:** Uses `build-release-v1.1.sh` which accepts `VERSION` environment variable
+  - **Output:** Creates `ivory_${VERSION}_all.deb` in `release-artifacts/ivory-linux/`
+  - **Status:** ✅ Working - Linux builds use dynamic versioning
+
+- **macOS Build Compatibility**
+  - **Requirements:** PyInstaller with macOS-specific spec file (`build_macos.spec`)
+  - **Output:** Creates `Ivory.app` bundle, then zips it as `Ivory-macOS-v${VERSION}.zip`
+  - **Status:** ✅ Working - macOS builds create proper `.app` bundles
+
+### Build Workflow Details
+- **Matrix Strategy:** Uses GitHub Actions matrix to build all platforms in parallel
+- **Dependencies:** All platforms install from `build_scripts/requirements.txt`
+  - PyQt5>=5.15.0
+  - mido>=1.2.10
+  - python-rtmidi>=1.4.9
+  - pyinstaller>=5.0
+- **Release Creation:** Single `release` job combines all artifacts and creates GitHub Release
+- **Release Notes:** Automatically uses `RELEASE_${VERSION}.md` file (e.g., `RELEASE_v1.1.md`)
+- **Screenshots:** Includes all PNG files from `screenshots/` directory in release
+
+### Platform-Specific Build Notes
+- **Linux (.deb):**
+  - Requires `dpkg-dev` (installed automatically in workflow)
+  - Build script generates GNOME metadata (`metainfo.xml`) with screenshots
+  - Package includes desktop file, icon, and AppStream metadata
+  
+- **Windows (.exe):**
+  - Uses PyInstaller with `build_windows.spec`
+  - Creates single-file executable (no COLLECT mode)
+  - Executable location: `build_scripts/dist/Ivory.exe` (or `build_scripts/dist/Ivory/Ivory.exe`)
+  - Icon support: Uses `screenshots/icon.ico` if available
+  
+- **macOS (.app/.zip):**
+  - Uses PyInstaller with `build_macos.spec`
+  - Creates `.app` bundle following macOS conventions
+  - Bundled as `.zip` for distribution
+  - Includes all required dependencies and data files
+
 ## Notes
 
 - These issues primarily involve:
