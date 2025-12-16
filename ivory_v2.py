@@ -157,7 +157,7 @@ class PianoWidget(QWidget):
 
         # Manual click mode - for testing without MIDI keyboard
         self.manual_notes: Set[int] = set()  # Notes toggled by mouse clicks
-        self.click_enabled = False  # Key toggle is OFF by default
+        self.click_enabled = False  # Enable click-to-toggle (disabled by default)
 
         # Color settings
         self.dark_mode = False
@@ -516,8 +516,9 @@ class ChordLabelWidget(QWidget):
                 return
 
             # Convert text representations to symbols for display
-            # hdim7 → ø7, dim7 → °7 (order matters: hdim7 must be replaced first!)
-            display_chord = self.current_chord.replace('hdim7', 'ø7').replace('dim7', '°7')
+            # Order matters: hdim7 must be replaced before dim7, and dim7 before dim
+            # hdim7 → ø7, dim7 → °7, dim → ° (for triads)
+            display_chord = self.current_chord.replace('hdim7', 'ø7').replace('dim7', '°7').replace('dim', '°')
 
             # Calculate font size based on height
             font_size = max(12, int(self.height() * 0.6))
@@ -567,48 +568,36 @@ class ChordLabelWidget(QWidget):
                 # Process character by character
                 for i, char in enumerate(display_chord):
                     if char == '°':
-                        # Use width of a digit (like '7') for symbol spacing - ensures consistent width
-                        symbol_width = metrics.boundingRect('7').width()
-                        # Add proper spacing before symbol - use a fraction of character width
-                        space_before = max(2, symbol_width // 4)  # At least 2px, or 1/4 of symbol width
-                        current_x += space_before
-                        
+                        # Add space before symbol (increased for better spacing)
+                        padding_before = 8
+                        current_x += padding_before
+
+                        # Draw ° as a small circle
                         circle_size = max(4, int(font_size * 0.35))
                         circle_y = int(text_y - metrics.ascent() * 0.7)
-                        # Center circle in remaining symbol width (after space)
-                        remaining_width = symbol_width - space_before
-                        circle_x = current_x + (remaining_width - circle_size) // 2
-                        
-                        # Draw ° as a small circle
                         painter.setPen(QPen(QColor(232, 220, 192), 1.5))
                         painter.setBrush(Qt.NoBrush)
-                        painter.drawEllipse(circle_x, circle_y, circle_size, circle_size)
+                        painter.drawEllipse(current_x, circle_y, circle_size, circle_size)
 
-                        # Move past symbol - use full allocated width
-                        current_x += remaining_width
+                        # Move past symbol with minimal padding after
+                        current_x += circle_size + 3
                     elif char == 'ø':
-                        # Use width of a digit (like '7') for symbol spacing - ensures consistent width
-                        symbol_width = metrics.boundingRect('7').width()
-                        # Add proper spacing before symbol - use a fraction of character width
-                        space_before = max(2, symbol_width // 4)  # At least 2px, or 1/4 of symbol width
-                        current_x += space_before
-                        
+                        # Add space before symbol (increased for better spacing)
+                        padding_before = 8
+                        current_x += padding_before
+
+                        # Draw ø as a circle with a diagonal line
                         circle_size = max(6, int(font_size * 0.45))
                         circle_y = int(text_y - metrics.ascent() * 0.4)
-                        # Center circle in remaining symbol width (after space)
-                        remaining_width = symbol_width - space_before
-                        circle_x = current_x + (remaining_width - circle_size) // 2
-                        
-                        # Draw ø as a circle with a diagonal line
                         painter.setPen(QPen(QColor(232, 220, 192), 1.5))
                         painter.setBrush(Qt.NoBrush)
-                        painter.drawEllipse(circle_x, circle_y, circle_size, circle_size)
+                        painter.drawEllipse(current_x, circle_y, circle_size, circle_size)
                         # Draw diagonal slash through circle
-                        painter.drawLine(circle_x, circle_y + circle_size,
-                                       circle_x + circle_size, circle_y)
+                        painter.drawLine(current_x, circle_y + circle_size,
+                                       current_x + circle_size, circle_y)
 
-                        # Move past symbol - use full allocated width
-                        current_x += remaining_width
+                        # Move past symbol with minimal padding after
+                        current_x += circle_size + 3
                     else:
                         # Draw regular character
                         painter.drawText(current_x, int(text_y), char)
@@ -700,7 +689,7 @@ class MIDIMonitor(QMainWindow):
             "borderless_mode": False,
             "chord_window_detached": False,
             "detached_chord_height": 50,
-            "click_enabled": False,  # Key toggle is OFF by default
+            "click_enabled": False,
             "show_no_midi_warning": True
         }
         
@@ -720,8 +709,7 @@ class MIDIMonitor(QMainWindow):
                     self._borderless_mode = config.get("borderless_mode", defaults["borderless_mode"])
                     self.chord_window_detached = config.get("chord_window_detached", defaults["chord_window_detached"])
                     self._detached_chord_height = config.get("detached_chord_height", defaults["detached_chord_height"])
-                    # Always start with keytoggle OFF, regardless of saved setting
-                    self._click_enabled = False
+                    self._click_enabled = config.get("click_enabled", defaults["click_enabled"])
                     self.show_no_midi_warning = config.get("show_no_midi_warning", defaults["show_no_midi_warning"])
             except Exception:
                 # Use defaults on error
@@ -1918,17 +1906,6 @@ class MIDIMonitor(QMainWindow):
         link_label.setOpenExternalLinks(True)
         layout.addWidget(link_label)
         
-        # Add version number at bottom left
-        version_label = QLabel("v.1.0.13")
-        version_font = QFont("Courier New", 8, QFont.Normal)
-        if not version_font.exactMatch():
-            version_font = QFont("Courier", 8, QFont.Normal)
-        if not version_font.exactMatch():
-            version_font = QFont("monospace", 8, QFont.Normal)
-        version_label.setFont(version_font)
-        version_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
-        layout.addWidget(version_label)
-        
         # Add close button
         buttons = QDialogButtonBox(QDialogButtonBox.Ok)
         buttons.accepted.connect(dialog.accept)
@@ -1950,19 +1927,17 @@ class MIDIMonitor(QMainWindow):
         self._borderless_mode = False
         self.chord_window_detached = False
         self._detached_chord_height = 50
-        self._click_enabled = False  # Key toggle is OFF by default
-        
-        # Reset key toggle to off
-        if hasattr(self, 'piano_widget'):
-            self.piano_widget.click_enabled = False
-            self.piano_widget.manual_notes.clear()
-            self.piano_widget.update()
+        self._click_enabled = False
         
         # Apply borderless mode change (will be False after reset)
         self._apply_borderless_mode()
         
         # Reset window size
         self.set_window_size_percent(100)
+        
+        # Reset click_enabled on piano widget
+        if hasattr(self, 'piano_widget'):
+            self.piano_widget.click_enabled = False
         
         # Update chord detector preferences
         if self.chord_detector:
@@ -2067,16 +2042,26 @@ def main():
             print("  No MIDI input ports found!")
         return
 
-    # Fork the process to detach from terminal
+    # Fork the process to detach from terminal (Unix/Linux/macOS only)
     # This allows closing the terminal without killing Ivory
-    if os.fork() > 0:
-        # Parent process - exit immediately
-        sys.exit(0)
-
-    # Child process continues
-    # Redirect stdout/stderr to /dev/null
-    sys.stdout = open(os.devnull, 'w')
-    sys.stderr = open(os.devnull, 'w')
+    # 
+    # IMPORTANT: Windows compatibility - os.fork() doesn't exist on Windows
+    # Always check hasattr(os, 'fork') before calling fork() to avoid AttributeError
+    # See WINDOWS_COMPATIBILITY.md for details
+    #
+    if hasattr(os, 'fork'):
+        if os.fork() > 0:
+            # Parent process - exit immediately
+            sys.exit(0)
+        # Child process continues
+        # Redirect stdout/stderr to /dev/null (Unix only)
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
+    else:
+        # Windows: fork() doesn't exist, so we can't detach from terminal
+        # On Windows, the app will run in the terminal window
+        # This is acceptable behavior for Windows users
+        pass
 
     # Create application (removed single-instance check - it was causing issues)
     app = QApplication(sys.argv)

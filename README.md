@@ -11,7 +11,7 @@
 ![Cm11 Chord](screenshots/Cm11.png)
 
 ### D7(b9,#11) - Complex Altered Dominant
-![D7(b9,#11) Chord](screenshots/D7%20(b9,%23%2311).png)
+![D7(b9,#11) Chord](screenshots/D7-b9-11.png)
 
 ### Ebm11 - Extended Minor Chord
 ![Ebm11 Chord](screenshots/Ebm11.png)

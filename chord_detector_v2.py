@@ -568,7 +568,7 @@ class ChordDetector:
         if len(active_notes) < self.min_notes_for_chord:
             return None
 
-        # For exactly 2 notes, detect interval instead of chord
+        # For exactly 2 notes, detect as interval instead of chord
         if len(active_notes) == 2:
             return self.detect_interval(active_notes)
 
@@ -583,56 +583,71 @@ class ChordDetector:
 
         # Convert to pitch classes
         pitch_classes_all = sorted(set(note % 12 for note in active_notes))
+        
+        # Store early scale check result for later use
+        scale_early_check = None
 
-        # IMPROVED SCALE DETECTION LOGIC (v2.1):
+        # IMPROVED SCALE DETECTION LOGIC (v2.0):
         # Check for scales when:
-        # 1. We have 5+ unique pitch classes
-        # 2. Notes are stepwise (clustered pattern - no skips)
-        # 3. Notes span at least a 7th (11 semitones for major 7th, 10 for minor 7th)
-        # 4. All scale degrees are present (exact match with scale pattern)
-        # This prioritizes scale detection for stepwise patterns that form complete scales
+        # 1. We have 5+ unique pitch classes (pentatonic scales and modes)
+        # 2. Notes are connected via steps/half-steps (clustered pattern), OR
+        # 3. Notes span at least one octave (>= 12 semitones)
+        # This prioritizes scale detection for stepwise patterns
         should_check_scale_later = False
         chord_span_early = max(active_notes) - min(active_notes)
-        lowest_note = min(active_notes)
-        lowest_pc = lowest_note % 12
+        is_clustered_check = self.is_clustered(active_notes)
         
         if len(pitch_classes_all) >= 5:
-            # Check if notes are stepwise (clustered) - no skips in scale degrees
-            is_stepwise = self.is_clustered(active_notes)
-            
-            # Check if it spans at least a 7th (10 semitones = minor 7th, 11 = major 7th)
-            spans_seventh = chord_span_early >= 10
-            
-            # For modes of Major, Melodic Minor, or Harmonic Minor:
-            # - Must be stepwise (no skips)
-            # - Must span at least a 7th
-            # - Must have all notes of the scale (will be checked in detect_scale)
-            if is_stepwise and spans_seventh:
+            # Check for scales if:
+            # - Notes are clustered (stepwise pattern), OR
+            # - Notes span at least one octave (modes of major often span octave+)
+            # - For pentatonic scales (5 notes), check if they match pentatonic patterns
+            if is_clustered_check or chord_span_early >= 12:
                 should_check_scale_later = True
-            # Also check for scales spanning an octave or more (backwards compat)
-            elif chord_span_early >= 12 and is_stepwise:
-                should_check_scale_later = True
+            # Also check for pentatonic scales even if not clustered (they have gaps)
+            elif len(pitch_classes_all) == 5:
+                # Check if it matches a pentatonic pattern
+                scale_check = self.detect_scale(active_notes)
+                if scale_check and ('Pentatonic' in scale_check):
+                    should_check_scale_later = True
 
-        # EARLY SCALE DETECTION for 7-note patterns (modes):
-        # If we have exactly 7 unique pitch classes and it's stepwise, check for scale FIRST
-        # This prevents 13th chord detection from overriding scale detection
-        if len(pitch_classes_all) == 7 and should_check_scale_later:
-            # Try scale detection early - if it matches a mode, return it immediately
+        # CRITICAL: Check for modes of major (7 notes) EARLY - prioritize scales
+        # Modes of major are 7-note scales that can be mistaken for extended chords
+        # Strategy: Check scale FIRST, store it, then check chord detection
+        # Later logic will decide between scale and chord based on root matching
+        if len(pitch_classes_all) == 7:
+            # Check scale detection FIRST
+            scale_early_check = self.detect_scale(active_notes)
+            if scale_early_check:
+                # Check if it's a mode of major (Ionian, Dorian, Phrygian, etc.)
+                if ('Ionian' in scale_early_check or 'Dorian' in scale_early_check or 'Phrygian' in scale_early_check or 
+                    'Lydian' in scale_early_check or 'Mixolydian' in scale_early_check or 'Aeolian' in scale_early_check or
+                    'Locrian' in scale_early_check):
+                    # Store for later comparison - don't return yet
+                    pass
+            
+            # Continue with chord detection - we'll check scale vs chord later
+            lowest_note = min(active_notes)
+            lowest_pc = lowest_note % 12
+
+            # Check if the lowest note forms a chord with 3rd and 7th
+            intervals_from_lowest = set((pc - lowest_pc) % 12 for pc in pitch_classes_all)
+            has_third = (3 in intervals_from_lowest or 4 in intervals_from_lowest)
+            has_seventh = (10 in intervals_from_lowest or 11 in intervals_from_lowest)
+
+            # If lowest note doesn't form a chord, try scale detection as fallback
+            if not (has_third and has_seventh):
+                if scale_early_check and scale_early_check.startswith(self.get_note_name(lowest_pc)):
+                    return scale_early_check
+            # If lowest note DOES form a chord (3rd+7th), continue with chord detection
+            # (13th chords will be detected below)
+        
+        # CRITICAL: Check for pentatonic scales (5 notes) EARLY - before chord detection
+        if len(pitch_classes_all) == 5:
             scale = self.detect_scale(active_notes)
-            if scale:
-                # Verify it's a mode of Major, Melodic Minor, or Harmonic Minor
-                scale_name = scale.split(' ', 1)[1] if ' ' in scale else ''
-                major_modes = {'Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Aeolian', 'Locrian'}
-                melodic_minor_modes = {'Melodic Minor', 'Dorian b2', 'Lydian Augmented', 'Lydian Dominant',
-                                      'Mixolydian b6', 'Locrian #2', 'Altered'}
-                harmonic_minor_modes = {'Harmonic Minor', 'Locrian #6', 'Ionian #5', 'Dorian #4',
-                                       'Phrygian Dominant', 'Lydian #2', 'Altered Diminished'}
-                
-                if scale_name in major_modes or scale_name in melodic_minor_modes or scale_name in harmonic_minor_modes:
-                    # Verify it starts with the lowest note (tonic)
-                    detected_root = scale.split(' ', 1)[0] if ' ' in scale else ''
-                    if detected_root == self.get_note_name(lowest_pc):
-                        return scale  # Return scale immediately, don't check for chords
+            if scale and 'Pentatonic' in scale:
+                # Pentatonic scales - ALWAYS prefer scale over chord
+                return scale
 
 
         # Try chord detection
@@ -656,9 +671,6 @@ class ChordDetector:
         # Rule: If bass has both M3+m3 OR both m7+M7, reject UNLESS upper structure forms valid chord
         # Example: C Eb F# A E (from C: has m3=Eb and M3=E) - should be filtered
         # Example: C Db Eb Fb (from C: has m3=Eb and M3=E, but Db Eb E = DbmΔ9) - allow as DbmΔ9/C
-        # Get highest and lowest notes early for use in pre-detection filter
-        highest_note_for_validation = max(active_notes)
-        highest_pc_for_validation = highest_note_for_validation % 12
         lowest_note_for_validation = min(active_notes)
         lowest_pc_for_validation = lowest_note_for_validation % 12
         intervals_from_bass = set((pc - lowest_pc_for_validation) % 12 for pc in pitch_classes)
@@ -667,78 +679,46 @@ class ChordDetector:
         has_m7_and_M7_from_bass = (10 in intervals_from_bass and 11 in intervals_from_bass)
 
         if has_m3_and_M3_from_bass or has_m7_and_M7_from_bass:
-            # Check if a valid chord can be formed from a NON-BASS root (using all pitch classes)
-            # Example: C Db Eb E - from Db: [0, 2, 3, 11] = DbmΔ9, so allow as DbmΔ9/C
-            # CRITICAL: Reject altered dominants with #9/#11 ONLY if detected from NON-BASS root
-            # Reason: #9 is enharmonic with b3, creating M3+m3 conflicts from bass
-            # Valid altered dominants CAN exist with root in bass (e.g., G7(#9) = G B D F A#)
-            # but the M3+m3 conflict must come from the altered extensions, not from the bass
-            non_bass_pcs = [pc for pc in pitch_classes if pc != lowest_pc_for_validation]
-            if len(non_bass_pcs) >= 2:  # Need at least 2 non-bass notes to form a chord
-                # Try to detect chord from all pitch classes with non-bass roots
-                slash_chord_valid = False
-                valid_chord_type = None
-                found_altered_from_non_bass = False
-                for potential_root in non_bass_pcs:
-                    intervals_from_potential = sorted((pc - potential_root) % 12 for pc in pitch_classes)
-                    # Check if this matches any chord pattern
-                    for chord_type, pattern in CHORD_PATTERNS.items():
-                        if set(pattern) == set(intervals_from_potential):
-                            # Found a match from NON-BASS root - check if it's an altered dominant
-                            chord_type_str = str(chord_type)
-                            if '#9' in chord_type_str or '#11' in chord_type_str:
-                                # Altered dominant from NON-BASS root with M3+m3 conflicts from bass
-                                # Mark this but continue checking other roots
-                                found_altered_from_non_bass = True
+            # CRITICAL: Check if bass root forms a valid altered dominant FIRST
+            # Altered dominants (7#9, 7b9, etc.) intentionally have M3+m3 or m7+M7
+            # Example: C7#9 (C E G Bb Eb) has m3 (Eb) and M3 (E) - this is valid!
+            intervals_from_bass_sorted = sorted((pc - lowest_pc_for_validation) % 12 for pc in pitch_classes)
+            bass_forms_altered_dominant = False
+            altered_patterns = ['7#9', '7b9', '7#9#11', '7b9#11', '7#9b13', '7b9b13', 
+                              '7#9#11b13', 'altered', '7#11', '7b13', '7#11b13']
+            for chord_type, pattern in CHORD_PATTERNS.items():
+                if any(alt in chord_type for alt in altered_patterns):
+                    if sorted(pattern) == intervals_from_bass_sorted:
+                        # Bass root forms a valid altered dominant - allow it
+                        bass_forms_altered_dominant = True
+                        break
+            
+            if not bass_forms_altered_dominant:
+                # Check if a valid chord can be formed from a NON-BASS root (using all pitch classes)
+                # Example: C Db Eb E - from Db: [0, 2, 3, 11] = DbmΔ9, so allow as DbmΔ9/C
+                non_bass_pcs = [pc for pc in pitch_classes if pc != lowest_pc_for_validation]
+                if len(non_bass_pcs) >= 2:  # Need at least 2 non-bass notes to form a chord
+                    # Try to detect chord from all pitch classes with non-bass roots
+                    slash_chord_valid = False
+                    for potential_root in non_bass_pcs:
+                        intervals_from_potential = sorted((pc - potential_root) % 12 for pc in pitch_classes)
+                        # Check if this matches any chord pattern
+                        for chord_type, pattern in CHORD_PATTERNS.items():
+                            if set(pattern) == set(intervals_from_potential):
+                                # Found a valid chord from non-bass root
+                                slash_chord_valid = True
                                 break
-                            # Valid non-altered chord from non-bass root
-                            slash_chord_valid = True
-                            valid_chord_type = chord_type
+                        if slash_chord_valid:
                             break
-                    if slash_chord_valid:
-                        break
 
-                # If we only found altered dominants from non-bass roots, reject
-                if found_altered_from_non_bass and not slash_chord_valid:
+                    if not slash_chord_valid:
+                        # No valid chord from non-bass root - reject this chord entirely
+                        return None
+                    # else: Valid slash chord possible, continue
+                else:
+                    # Too few non-bass notes - reject
                     return None
-                
-                if not slash_chord_valid and not found_altered_from_non_bass:
-                    # No valid chord from non-bass root - reject this chord entirely
-                    return None
-                # else: Valid slash chord exists from non-bass root
-                # Find which non-bass root has the valid chord and detect it
-                valid_slash_root_pre = None
-                for potential_root in non_bass_pcs:
-                    intervals_from_potential_pre = sorted((pc - potential_root) % 12 for pc in pitch_classes)
-                    for chord_type_pre, pattern_pre in CHORD_PATTERNS.items():
-                        if set(pattern_pre) == set(intervals_from_potential_pre):
-                            valid_slash_root_pre = potential_root
-                            break
-                    if valid_slash_root_pre is not None:
-                        break
-                
-                if valid_slash_root_pre is not None:
-                    # Detect the chord from the valid non-bass root
-                    # We need to calculate has_global_dominant_quality first
-                    has_global_dominant_quality_pre = False
-                    for potential_root_pre in pitch_classes:
-                        m3_above_pre = (potential_root_pre + 4) % 12
-                        m7_above_pre = (potential_root_pre + 10) % 12
-                        if m3_above_pre in pitch_classes and m7_above_pre in pitch_classes:
-                            has_global_dominant_quality_pre = True
-                            break
-                    
-                    intervals_from_valid_root_pre = sorted((pc - valid_slash_root_pre) % 12 for pc in pitch_classes)
-                    slash_match_result_pre = self._match_chord_pattern(intervals_from_valid_root_pre, valid_slash_root_pre, active_notes,
-                                                                       highest_note_for_validation, highest_pc_for_validation, lowest_pc_for_validation, has_global_dominant_quality_pre)
-                    if slash_match_result_pre:
-                        slash_chord_name_pre, slash_score_pre = slash_match_result_pre
-                        bass_note_name_pre = self.get_note_name(lowest_pc_for_validation)
-                        return f"{slash_chord_name_pre}/{bass_note_name_pre}"
-                # If we can't detect the slash chord, continue with normal detection
-            else:
-                # Too few non-bass notes - reject
-                return None
+            # else: Bass forms valid altered dominant - continue (allow the chord)
 
         # CRITICAL EARLY SPECIAL CASE: m6 slash chord pattern
         # When we have exactly 4 notes with intervals [0, 1, 7, 10] from bass
@@ -808,12 +788,11 @@ class ChordDetector:
                             return f"{root_name_dim7}dim7/{bass_name_dim7}"
 
         # CRITICAL EARLY SPECIAL CASE 3: half-diminished 7th vs minor 6th
-        # m7b5 and m6 are enharmonic: Gm7b5 (G Bb Db F) = Bbm6 (Bb Db F G)
-        # Prefer m6 interpretation UNLESS the m7b5 root is in the bass
-        # Example: G Bb Db F = Gm7b5 (G in bass, keep as m7b5)
-        #          Bb Db F G = Bbm6 (Bb in bass, prefer m6)
-        #          C Bb Db G = Bbm6/C (C in bass, interpret as m6 with slash)
-        if len(pitch_classes) == 4:
+        # REMOVED: m7b5 to m6 conversion logic
+        # User requirement: Prefer m7b5 and m6 based on scoring, not bass position
+        # This allows Gm7b5 to be detected even when G is not in bass
+        # The normal detection logic will handle m7b5 vs m6 preference based on scoring
+        if False:  # Disabled - let normal detection handle m7b5 vs m6
             lowest_note_halfdim = min(active_notes)
             lowest_pc_halfdim = lowest_note_halfdim % 12
 
@@ -825,7 +804,7 @@ class ChordDetector:
                     # If the m7b5 root is in the bass, use m7b5
                     if potential_halfdim_root == lowest_pc_halfdim:
                         root_name_halfdim = self.get_note_name(potential_halfdim_root)
-                        return f"{root_name_halfdim}hdim7"
+                        return f"{root_name_halfdim}m7b5"
                     else:
                         # Root is NOT in bass - prefer m6 interpretation
                         # The m6 root is the note at interval 3 (m3) above the m7b5 root
@@ -869,21 +848,6 @@ class ChordDetector:
         best_root_pc = None
 
         DEBUG = False  # Set to True to enable debugging
-        
-        # DEBUG: Test 1c debugging
-        debug_test1c = False
-        if len(active_notes) == 5 and lowest_pc == 2:  # D in bass, 5 notes
-            test_pcs = sorted(set(n % 12 for n in active_notes))
-            if test_pcs == [0, 2, 4, 7]:  # C, D, E, G
-                d_count = sum(1 for n in active_notes if n % 12 == 2)
-                if d_count == 2:  # D doubled
-                    debug_test1c = True
-                    DEBUG = True
-                    print(f"\n=== DEBUG TEST 1c: D E G C D (D doubled) ===")
-                    print(f"active_notes: {sorted(active_notes)}")
-                    print(f"pitch_classes: {sorted(pitch_classes)}")
-                    print(f"lowest_pc: {lowest_pc} (D)")
-        
         if DEBUG:
             print(f"DEBUG: has_global_dominant_quality = {has_global_dominant_quality}")
 
@@ -906,7 +870,7 @@ class ChordDetector:
                     best_match = chord_name
                     best_root_pc = root_pc
                     if DEBUG:
-                        print(f"DEBUG:   -> NEW BEST! best_match={best_match}, best_score={best_score}")
+                        print(f"DEBUG:   -> NEW BEST! best_match={best_match}")
 
         # SPECIAL RULE: For extended chords (9/11/13), root=bass always wins
         # If best match is an extended chord but root is NOT bass, check if bass-as-root also gives extended chord
@@ -923,12 +887,17 @@ class ChordDetector:
                     # Check if bass interpretation is also an extended chord
                     bass_is_extended = ('9' in bass_chord_name or '11' in bass_chord_name or '13' in bass_chord_name)
                     if bass_is_extended:
-                        # Bass-as-root wins for extended chords
-                        if DEBUG:
-                            print(f"DEBUG: EXTENDED CHORD OVERRIDE - switching from {best_match} to {bass_chord_name} (bass note priority)")
-                        best_match = bass_chord_name
-                        best_root_pc = lowest_pc
-                        best_score = bass_score
+                        # CRITICAL FIX: Only overwrite if bass score is HIGHER than current best score
+                        # This prevents overwriting high-scoring add9 chords (like Cadd9/F with 10000 bonus)
+                        # with lower-scoring extended chords from bass (like F6/9)
+                        if bass_score > best_score:
+                            # Bass-as-root wins for extended chords (only if score is higher)
+                            if DEBUG:
+                                print(f"DEBUG: EXTENDED CHORD OVERRIDE - switching from {best_match} (score {best_score:.1f}) to {bass_chord_name} (score {bass_score:.1f}) (bass note priority)")
+                            best_match = bass_chord_name
+                            best_root_pc = lowest_pc
+                            best_score = bass_score
+                        # else: Keep the higher-scoring chord (Cadd9/F beats F6/9)
 
         # SPECIAL RULE: Prefer clear triad/7th slash chords over complex bass chords
         # If best match from bass is complex/ambiguous (like G6/9), check if any non-bass note
@@ -970,34 +939,6 @@ class ChordDetector:
                     if non_bass_match:
                         non_bass_chord, non_bass_score = non_bass_match
 
-                        # CRITICAL: Check for add9 FIRST before other clear chords
-                        # Example: D E G C D should be Cadd9/D, not Em7/D
-                        # BUT: D E G C (D not doubled) should be C/D, not Cadd9/D
-                        is_add9_clear = 'add9' in non_bass_chord
-                        if is_add9_clear:
-                            # Check if add9 is a perfect match (no missing/extra intervals)
-                            intervals_from_add9_root = sorted((pc - root_pc) % 12 for pc in pitch_classes)
-                            add9_pattern = CHORD_PATTERNS.get('add9', [0, 2, 4, 7])
-                            if set(intervals_from_add9_root) == set(add9_pattern):
-                                # Perfect add9 match - BUT only prefer if 9th is doubled
-                                # Check if the 9th (interval 2) is doubled
-                                ninth_pc_add9 = (root_pc + 2) % 12
-                                ninth_count_add9 = sum(1 for note in active_notes if note % 12 == ninth_pc_add9)
-                                bass_is_ninth_add9 = (lowest_pc == ninth_pc_add9)
-                                
-                                if bass_is_ninth_add9 and ninth_count_add9 > 1:
-                                    # 9th is doubled - prefer add9
-                                    if DEBUG:
-                                        print(f"DEBUG:   FOUND PERFECT add9 match with DOUBLED 9th: {non_bass_chord} (score {non_bass_score})")
-                                        print(f"DEBUG:   PREFERRING add9 (perfect match, doubled 9th) over other clear chords")
-                                    best_clear_slash = non_bass_chord
-                                    best_clear_score = non_bass_score + 10000.0  # Huge boost to beat everything
-                                    best_clear_root = root_pc
-                                    # Don't check other roots - add9 wins
-                                    break
-                                elif DEBUG:
-                                    print(f"DEBUG:   Found add9 but 9th NOT doubled (count={ninth_count_add9}), allowing simplification")
-                        
                         # Check if this is a "clear" chord: basic triads or 7th chords
                         # Extract just the chord quality (remove the root note name)
                         chord_quality = non_bass_chord.replace(self.get_note_name(root_pc), '').strip()
@@ -1131,6 +1072,55 @@ class ChordDetector:
                     root_name = self.get_note_name(best_root_pc)
                     best_match = f"{root_name}6"
 
+        # CRITICAL: Check if bass root forms a perfect sus chord match
+        # If so, prefer sus chord over slash chord interpretations
+        # Example: C D F Bb with C in bass → C9sus (not Bb/C)
+        # BUT: Only apply if the current best_match is a slash chord interpretation
+        # and the sus chord is a PERFECT match (exact pattern, no missing/extra notes)
+        if best_match and best_root_pc is not None and lowest_pc != best_root_pc:
+            # Only check if current best_match would result in a slash chord
+            # Check if bass root forms a perfect sus chord
+            intervals_from_bass = sorted((pc - lowest_pc) % 12 for pc in pitch_classes)
+            match_from_bass = self._match_chord_pattern(intervals_from_bass, lowest_pc,
+                                                       active_notes, highest_note, highest_pc, lowest_pc, has_global_dominant_quality)
+            if match_from_bass:
+                bass_chord_name, bass_score = match_from_bass
+                # Check if it's a sus chord (9sus, 13sus, etc.) AND it's a perfect match
+                is_sus_chord = ('9sus' in bass_chord_name or '13sus' in bass_chord_name or 
+                               bass_chord_name.endswith('9sus') or bass_chord_name.endswith('13sus'))
+                
+                # Only prefer sus chord if:
+                # 1. It's actually a 9sus or 13sus chord (NOT sus2 or sus4)
+                # 2. The intervals match EXACTLY (perfect pattern match)
+                # 3. Current best_match is NOT already a sus chord or simple triad
+                # 4. Sus chord score is significantly higher (to avoid false positives)
+                if is_sus_chord:
+                    # Check if intervals match exact sus patterns (only 9sus and 13sus)
+                    intervals_set_bass = set(intervals_from_bass)
+                    is_perfect_9sus = intervals_set_bass == {0, 2, 5, 10}  # C9sus
+                    is_perfect_13sus = intervals_set_bass == {0, 2, 5, 9, 10}  # C13sus
+                    is_perfect_match = is_perfect_9sus or is_perfect_13sus
+                    
+                    # Only override if perfect match AND current best is not a sus chord or simple triad
+                    # Also check that current best is actually a slash chord candidate (not a simple triad)
+                    # CRITICAL: Don't override simple triads (like F/G) - prefer slash chord notation
+                    current_is_sus = ('sus' in best_match.lower())
+                    current_is_simple_triad = (len(best_match) <= 2 or 
+                                              (best_match.endswith('m') and len(best_match) <= 3) or
+                                              best_match.endswith('sus2') or best_match.endswith('sus4'))
+                    current_is_major7 = ('Δ7' in best_match or 'maj7' in best_match.lower())
+                    current_would_be_slash = (best_root_pc != lowest_pc and not current_is_simple_triad)
+                    
+                    # Only apply override for 9sus/13sus, not sus2/sus4
+                    # Don't override if current best is a simple triad (like F/G) or major7 (like CΔ7/F)
+                    # These should use slash chord notation, not sus chord interpretation
+                    if (is_perfect_match and not current_is_sus and not current_is_simple_triad and 
+                        not current_is_major7 and current_would_be_slash and bass_score > best_score + 15000):
+                        # Perfect sus chord from bass root wins - use it instead of slash chord
+                        best_match = bass_chord_name
+                        best_root_pc = lowest_pc
+                        best_score = bass_score
+
         # Add bass note if different from root (slash chord detection)
         if best_match and best_root_pc is not None and lowest_pc != best_root_pc:
             bass_interval_from_root = (lowest_pc - best_root_pc) % 12
@@ -1175,12 +1165,37 @@ class ChordDetector:
                     # Bass is only octaves/fifths - skip slash notation entirely
                     skip_slash_for_dominant_bass = True
 
+            # USER REQUIREMENT: For m7b5 chords, prefer root position even if root is not in bass
+            # Example: G Bb Db F → Gm7b5 (not Gm7b5/Db)
+            # For m6 chords: Use slash notation when bass ≠ root, EXCEPT when bass is the 6th
+            # When bass is the 6th of m6, prefer m7b5 interpretation (handled by scoring logic)
+            # Example: Bb Db F G with Bb in bass → Bbm6
+            # Example: Bb Db F G with Db in bass → Bbm6/Db (use slash)
+            # Example: Bb Db F G with G in bass → Gm7b5 (6th of Bbm6, prefer m7b5)
+            skip_slash_for_m7b5_m6 = False
+            is_m7b5 = self._match_chord_type(best_match, 'half_diminished7')
+            is_m6 = self._match_chord_type(best_match, 'minor6') or self._match_chord_type(best_match, 'minor6_no5')
+            if is_m7b5:
+                skip_slash_for_m7b5_m6 = True
+            elif is_m6:
+                # For m6, only skip slash if bass IS the 6th (then m7b5 wins via scoring)
+                # The 6th of m6 is interval 9 (major 6th)
+                m6_sixth_interval = 9
+                bass_interval_from_root = (lowest_pc - best_root_pc) % 12
+                if bass_interval_from_root == m6_sixth_interval:
+                    # Bass IS the 6th → skip slash (m7b5 will win via scoring logic)
+                    skip_slash_for_m7b5_m6 = True
+
             # Determine if we should skip slash notation
             if skip_slash_for_root_doubling:
                 # Chord root is doubled in the voicing - skip slash entirely (root doubling rule)
                 skip_slash = True
             elif skip_slash_for_dominant_bass:
                 # Dominant chord with only octaves/fifths in bass - skip slash entirely
+                skip_slash = True
+            elif skip_slash_for_m7b5_m6:
+                # m7b5 chords - prefer root position
+                # m6 chords - prefer root position unless bass is the 6th
                 skip_slash = True
             else:
                 # Normal slash chord logic continues below
@@ -1198,8 +1213,15 @@ class ChordDetector:
                     # Don't skip slash for 6/9 with 9 in bass
                     skip_slash = False
                 else:
-                    skip_slash = (is_extended and bass_interval_from_root in [2, 5, 7, 9, 10]) or \
-                                (is_altered and bass_interval_from_root in [1, 3, 6, 8])  # b9, #9, #11, b13
+                    # CRITICAL: For major7 and minor7 inversions, always show slash notation
+                    # Don't skip slash for major7 or minor7 when bass is a chord tone
+                    is_major7 = 'Δ7' in best_match or 'maj7' in best_match
+                    is_minor7 = 'm7' in best_match and 'maj7' not in best_match and 'Δ7' not in best_match
+                    if (is_major7 or is_minor7) and bass_interval_from_root in [4, 7, 10, 11]:  # 3rd, 5th, 7th in bass
+                        skip_slash = False  # Always show slash for major7/minor7 inversions
+                    else:
+                        skip_slash = (is_extended and bass_interval_from_root in [2, 5, 7, 9, 10]) or \
+                                    (is_altered and bass_interval_from_root in [1, 3, 6, 8])  # b9, #9, #11, b13
 
             # For diminished and augmented chords, never show inversions (they're symmetrical)
             # Only skip slash for dim7 and augmented (symmetrical chords)
@@ -1281,43 +1303,20 @@ class ChordDetector:
                 if not special_case_no_simplify:
                     if bass_interval_from_root in essential_intervals:
                         # Bass is essential (e.g., F7/A where A is the 3rd) - don't simplify
-                        # EXCEPTION: For major/minor triads (but NOT add9), try simplification to see if we get sus chord
+                        # EXCEPTION: For major/minor triads and add9 chords, try simplification to see if we get sus chord
                         # Example 1: Eb major (Eb G Bb) with F → might be Eb2/G (Eb F Bb with G bass)
-                        # NEVER simplify add9 chords - preserve the extension notation
-                        # Example 2: Cadd9 (C E G D) with D bass → should stay as Cadd9/D, not simplify to C/D
-                        if best_match and 'add9' in best_match:
-                            # Never simplify add9 chords - preserve inversion notation
-                            should_simplify = False
-                        elif best_match and (best_match.endswith('m') or
+                        # Example 2: Ebadd9 (Eb G Bb F) with G bass → might be Eb2/G (Eb F Bb with G bass)
+                        if best_match and (best_match.endswith('m') or 'add9' in best_match or
                                          (len(best_match) <= 2 and not best_match.endswith('7') and
                                           not best_match.endswith('6'))):
-                            # This is a basic triad (not add9) - allow simplification
+                            # This is a basic triad or add9 chord - allow simplification
                             # to potentially find a sus chord
                             should_simplify = True
                         else:
                             should_simplify = False
                     else:
                         # Bass is an extension (e.g., D7/C where C is the 7th) - try simplification
-                        # BUT check add9 doubling rule first
-                        is_add9_check = 'add9' in best_match
-                        if is_add9_check:
-                            # Check if 9th is doubled
-                            ninth_interval_check = 2
-                            ninth_pc_check = (best_root_pc + ninth_interval_check) % 12
-                            bass_is_ninth_check = (lowest_pc == ninth_pc_check)
-                            ninth_count_check = sum(1 for note in active_notes if note % 12 == ninth_pc_check)
-                            
-                            if bass_is_ninth_check and ninth_count_check > 1:
-                                # 9th is in bass AND doubled - preserve add9 notation
-                                should_simplify = False
-                            elif bass_is_ninth_check and ninth_count_check == 1:
-                                # 9th is only in bass - allow simplification
-                                should_simplify = True
-                            else:
-                                # 9th is not in bass - preserve add9 notation
-                                should_simplify = False
-                        else:
-                            should_simplify = True
+                        should_simplify = True
 
                 # Special case: Never simplify sus2 or sus4 chords
                 # Example: Eb2/G should stay as Eb2/G, not simplify to Eb/G
@@ -1326,46 +1325,20 @@ class ChordDetector:
                 if is_sus:
                     should_simplify = False
 
-                # Special case: Only preserve add9 notation if the 9th is doubled
-                # Rule: If 9th appears only in bass → simplify to triad (C/D)
-                #       If 9th appears in both bass and upper structure → preserve add9 (Cadd9/D)
-                #       Root position add9 chords always preserve notation (Cadd9)
-                # Example: D E G C (D only in bass) → C/D
-                # Example: D E G C D (D doubled) → Cadd9/D
-                # Example: C D E G (root position) → Cadd9 (always preserved)
+                # Special case: Never simplify add9 chords to preserve inversion notation
+                # Example: E G D C should be Cadd9/E, not C/E
                 is_add9 = 'add9' in best_match
                 if is_add9:
-                    # Root position add9 chords always preserve notation
-                    if best_root_pc == lowest_pc:
-                        should_simplify = False
-                    else:
-                        # Slash chord - check if 9th is doubled (already checked above, but double-check here)
-                        # For add9 pattern [0, 4, 7, 2], interval 2 is the 9th
-                        ninth_interval = 2  # 9th is 2 semitones above root
-                        ninth_pc = (best_root_pc + ninth_interval) % 12
-                        
-                        # Count how many times the 9th appears
-                        ninth_count = sum(1 for note in active_notes if note % 12 == ninth_pc)
-                        
-                        # Check if bass is the 9th
-                        bass_is_ninth = (lowest_pc == ninth_pc)
-                        
-                        if bass_is_ninth and ninth_count > 1:
-                            # 9th is in bass AND doubled in upper structure - preserve add9 notation
-                            should_simplify = False
-                        elif bass_is_ninth and ninth_count == 1:
-                            # 9th is only in bass (not doubled) - allow simplification to triad
-                            should_simplify = True
-                        else:
-                            # 9th is not in bass - preserve add9 notation (e.g., Cadd9/E)
-                            should_simplify = False
+                    should_simplify = False
 
                 # NEW REQUIREMENT: For 7th chords in slash notation, simplify to triad
                 # if the 7TH note is not doubled (appears only once)
                 # Example: Bb C E G (Bb appears once) → C/Bb
                 # Example: Bb Bb C E G (Bb appears twice) → C7/Bb
                 # The 7th is a weak note if only played once, so we simplify
-                if not special_case_no_simplify and not is_sus and '7' in best_match and 'Δ7' not in best_match and 'm7' not in best_match and 'dim7' not in best_match:
+                # This is intentional: C7/Bb simplifies to C/Bb to differentiate from C/B
+                # BUT: Don't simplify if the 7th is in the bass for major7 and minor7 - preserve chord identity
+                if not special_case_no_simplify and not is_sus and '7' in best_match and 'dim7' not in best_match:
                     # Find the 7th note (10 or 11 semitones above root)
                     seventh_pc = None
                     if (best_root_pc + 10) % 12 in pitch_classes:
@@ -1374,96 +1347,38 @@ class ChordDetector:
                         seventh_pc = (best_root_pc + 11) % 12  # M7
 
                     if seventh_pc is not None:
-                        # Count how many times the 7TH appears
-                        seventh_count = sum(1 for note in active_notes if note % 12 == seventh_pc)
-                        if seventh_count == 1:
-                            # 7th appears only once - simplify to triad
-                            should_simplify = True
-                        else:
-                            # 7th is doubled - keep as 7th chord
+                        # CRITICAL: Don't simplify major7 or minor7 if 7th is in bass
+                        # This preserves CΔ7/B and Cm7/Bb notation
+                        if lowest_pc == seventh_pc and ('Δ7' in best_match or 'm7' in best_match):
+                            # 7th is in bass for major7 or minor7 - don't simplify
                             should_simplify = False
+                        # CRITICAL: Don't simplify major7 or minor7 when bass is not root
+                        # This preserves Cm7/G notation (G in bass, not root)
+                        # Check for both 'm7' and patterns like 'Cm7', 'Dm7', etc.
+                        elif lowest_pc != best_root_pc:
+                            # Check if it's a major7 or minor7 chord
+                            is_major7_chord = 'Δ7' in best_match or 'maj7' in best_match
+                            is_minor7_chord = ('m7' in best_match or best_match.endswith('m7') or 
+                                              '/m7' in best_match or 'm7/' in best_match)
+                            if is_major7_chord or is_minor7_chord:
+                                # Bass is not root for major7 or minor7 - don't simplify (preserve slash notation)
+                                should_simplify = False
+                        # CRITICAL: Don't simplify 13#11 chords - preserve #11
+                        elif '13#11' in best_match or '13(#11)' in best_match:
+                            # 13#11 chords should never be simplified
+                            should_simplify = False
+                        else:
+                            # Count how many times the 7TH appears
+                            seventh_count = sum(1 for note in active_notes if note % 12 == seventh_pc)
+                            if seventh_count == 1:
+                                # 7th appears only once - simplify to triad (for dominant 7th)
+                                should_simplify = True
+                            else:
+                                # 7th is doubled - keep as 7th chord
+                                should_simplify = False
 
                 # NEVER simplify add9 chords - preserve inversion notation
-                # Final check: if add9 and 9th is doubled in bass, don't simplify
-                is_add9_final = 'add9' in best_match
-                skip_add9_simplify = False
-                
-                # DEBUG: Test 1c debugging
-                debug_test1c = False
-                if len(active_notes) == 5 and lowest_pc == 2:  # D in bass, 5 notes
-                    test_pcs = sorted(set(n % 12 for n in active_notes))
-                    if test_pcs == [0, 2, 4, 7]:  # C, D, E, G
-                        d_count = sum(1 for n in active_notes if n % 12 == 2)
-                        if d_count == 2:  # D doubled
-                            debug_test1c = True
-                            print(f"\n=== DEBUG TEST 1c: D E G C D (D doubled) ===")
-                            print(f"best_match: {best_match}")
-                            print(f"best_root_pc: {best_root_pc}, lowest_pc: {lowest_pc}")
-                            print(f"is_add9_final: {is_add9_final}")
-                            print(f"active_notes: {sorted(active_notes)}")
-                            print(f"pitch_classes: {sorted(pitch_classes)}")
-                
-                if is_add9_final and best_root_pc != lowest_pc:
-                    # Check if 9th is doubled
-                    ninth_interval_final = 2
-                    ninth_pc_final = (best_root_pc + ninth_interval_final) % 12
-                    bass_is_ninth_final = (lowest_pc == ninth_pc_final)
-                    ninth_count_final = sum(1 for note in active_notes if note % 12 == ninth_pc_final)
-                    
-                    if bass_is_ninth_final and ninth_count_final > 1:
-                        # 9th is doubled - don't simplify, skip simplification entirely
-                        should_simplify = False
-                        skip_add9_simplify = True
-                        if debug_test1c:
-                            print(f"CHECK 1: 9th is doubled! bass_is_ninth_final={bass_is_ninth_final}, ninth_count_final={ninth_count_final}")
-                            print(f"  Setting should_simplify=False, skip_add9_simplify=True")
-                    elif bass_is_ninth_final and ninth_count_final == 1:
-                        # 9th is only in bass - allow simplification
-                        should_simplify = True
-                        if debug_test1c:
-                            print(f"CHECK 1: 9th only in bass. bass_is_ninth_final={bass_is_ninth_final}, ninth_count_final={ninth_count_final}")
-                            print(f"  Setting should_simplify=True")
-                    else:
-                        # 9th is not in bass - don't simplify
-                        should_simplify = False
-                        skip_add9_simplify = True
-                        if debug_test1c:
-                            print(f"CHECK 1: 9th not in bass. bass_is_ninth_final={bass_is_ninth_final}, ninth_count_final={ninth_count_final}")
-                            print(f"  Setting should_simplify=False, skip_add9_simplify=True")
-                
-                # Only proceed with simplification if should_simplify is True AND we're not skipping add9 simplification
-                # Also check again if add9 with doubled 9th - if so, skip simplification entirely
-                is_add9_before_simplify = 'add9' in best_match
-                if is_add9_before_simplify and best_root_pc != lowest_pc:
-                    ninth_interval_before = 2
-                    ninth_pc_before = (best_root_pc + ninth_interval_before) % 12
-                    bass_is_ninth_before = (lowest_pc == ninth_pc_before)
-                    ninth_count_before = sum(1 for note in active_notes if note % 12 == ninth_pc_before)
-                    if bass_is_ninth_before and ninth_count_before > 1:
-                        # 9th is doubled - skip simplification entirely, keep add9 notation
-                        skip_add9_simplify = True
-                        should_simplify = False
-                    elif bass_is_ninth_before and ninth_count_before == 1:
-                        # 9th is only in bass - allow simplification
-                        skip_add9_simplify = False
-                        should_simplify = True
-                    else:
-                        # 9th is not in bass - skip simplification, keep add9 notation
-                        skip_add9_simplify = True
-                        should_simplify = False
-                
-                # Only simplify if all conditions are met AND we're not skipping add9 simplification
-                # CRITICAL: If add9 with doubled 9th, NEVER simplify - skip this entire block
-                if debug_test1c:
-                    print(f"\nBEFORE SIMPLIFICATION BLOCK:")
-                    print(f"  skip_add9_simplify: {skip_add9_simplify}")
-                    print(f"  should_simplify: {should_simplify}")
-                    print(f"  'add9' not in best_match: {'add9' not in best_match}")
-                    print(f"  Condition result: {not skip_add9_simplify and should_simplify and 'add9' not in best_match}")
-                
-                if not skip_add9_simplify and should_simplify and 'add9' not in best_match:
-                    if debug_test1c:
-                        print(f"  ENTERING simplification block!")
+                if should_simplify and 'add9' not in best_match:
                     # Try detecting chord without the bass note for simpler interpretation
                     # This handles cases like "D7/C" -> "D/C"
                     notes_without_bass = {note for note in active_notes if note % 12 != lowest_pc}
@@ -1476,270 +1391,64 @@ class ChordDetector:
                     if len(notes_without_bass) >= 2 and should_simplify:
                         # Detect chord from remaining notes
                         alt_chord = self._detect_chord_simple(notes_without_bass)
-                        if debug_test1c:
-                            print(f"\n  INSIDE SIMPLIFICATION BLOCK:")
-                            print(f"    notes_without_bass: {sorted(notes_without_bass)}")
-                            print(f"    alt_chord detected: {alt_chord}")
 
                         if alt_chord:
-                            # CRITICAL: Check if best_match is add9 with doubled 9th BEFORE any simplification
-                            # This check must happen here because best_match might have been detected as add9
-                            if 'add9' in best_match and best_root_pc != lowest_pc:
-                                if debug_test1c:
-                                    print(f"    CHECK 2: best_match contains 'add9' and root != bass")
-                                ninth_interval_final_check = 2
-                                ninth_pc_final_check = (best_root_pc + ninth_interval_final_check) % 12
-                                bass_is_ninth_final_check = (lowest_pc == ninth_pc_final_check)
-                                ninth_count_final_check = sum(1 for note in active_notes if note % 12 == ninth_pc_final_check)
-                                if debug_test1c:
-                                    print(f"      ninth_pc_final_check: {ninth_pc_final_check} (should be 2 for D)")
-                                    print(f"      bass_is_ninth_final_check: {bass_is_ninth_final_check}")
-                                    print(f"      ninth_count_final_check: {ninth_count_final_check}")
-                                if bass_is_ninth_final_check and ninth_count_final_check > 1:
-                                    # 9th is doubled - skip ALL simplification, keep best_match as Cadd9
-                                    # Don't enter the simplification logic below
-                                    alt_chord = None  # Prevent simplification by making alt_chord None
-                                    if debug_test1c:
-                                        print(f"      CHECK 2 RESULT: 9th is doubled! Setting alt_chord=None")
-                            
-                            # Only proceed with simplification logic if alt_chord is not None
-                            if debug_test1c:
-                                print(f"    alt_chord after check: {alt_chord}")
-                            if alt_chord:
-                                if debug_test1c:
-                                    print(f"    PROCEEDING with simplification logic (alt_chord is not None)")
-                                # Don't simplify sus2/sus4 chords to major/minor triads
-                                alt_is_sus = alt_chord.endswith('2') or alt_chord.endswith('4') or \
-                                            'sus2' in alt_chord or 'sus4' in alt_chord
+                            # Don't simplify sus2/sus4 chords to major/minor triads
+                            alt_is_sus = alt_chord.endswith('2') or alt_chord.endswith('4') or \
+                                        'sus2' in alt_chord or 'sus4' in alt_chord
 
-                                # Check if current is a basic triad (just note name, or note name + accidental)
-                                # Examples: C, Cm, Eb, F#, Bb
-                                import re
-                                current_is_basic = bool(re.match(r'^[A-G][b#]?m?$', best_match))
+                            # Check if current is a basic triad (just note name, or note name + accidental)
+                            # Examples: C, Cm, Eb, F#, Bb
+                            import re
+                            current_is_basic = bool(re.match(r'^[A-G][b#]?m?$', best_match))
 
-                                # Special case: If current is add9 and alt is sus4, check if upper structure can be sus2
-                                # Example: Ebadd9 with upper structure Bb Eb F detected as Bb4 → try to re-detect as Eb2
-                                current_is_add9 = 'add9' in best_match
-                                if current_is_add9 and alt_is_sus and alt_chord.endswith('4'):
-                                    # Check if these notes can form sus2 from the same root as current (add9)
-                                    # Get the root of the current chord (e.g., Eb from Ebadd9)
-                                    current_root_name = best_match.split('add')[0]
-                                    # Check if alt_chord can be reinterpreted as sus2 from current root
-                                    if current_root_name + '2' in [self.get_note_name(pc % 12) + '2'
-                                                                   for pc in set(note % 12 for note in notes_without_bass)]:
-                                        # Try to detect as sus2 from the current root
-                                        # Re-detect forcing the original root
-                                        upper_pcs = sorted(set(note % 12 for note in notes_without_bass))
-                                        # Check if original root + sus2 pattern matches
-                                        for pc in upper_pcs:
-                                            if self.get_note_name(pc) == current_root_name:
-                                                # Found the root, check if it forms sus2
-                                                upper_intervals = sorted((n - pc) % 12 for n in upper_pcs)
-                                                if upper_intervals == [0, 2, 7]:  # Perfect sus2 pattern
-                                                    alt_chord = current_root_name + '2'
-                                                    break
+                            # Special case: If current is add9 and alt is sus4, check if upper structure can be sus2
+                            # Example: Ebadd9 with upper structure Bb Eb F detected as Bb4 → try to re-detect as Eb2
+                            current_is_add9 = 'add9' in best_match
+                            if current_is_add9 and alt_is_sus and alt_chord.endswith('4'):
+                                # Check if these notes can form sus2 from the same root as current (add9)
+                                # Get the root of the current chord (e.g., Eb from Ebadd9)
+                                current_root_name = best_match.split('add')[0]
+                                # Check if alt_chord can be reinterpreted as sus2 from current root
+                                if current_root_name + '2' in [self.get_note_name(pc % 12) + '2'
+                                                               for pc in set(note % 12 for note in notes_without_bass)]:
+                                    # Try to detect as sus2 from the current root
+                                    # Re-detect forcing the original root
+                                    upper_pcs = sorted(set(note % 12 for note in notes_without_bass))
+                                    # Check if original root + sus2 pattern matches
+                                    for pc in upper_pcs:
+                                        if self.get_note_name(pc) == current_root_name:
+                                            # Found the root, check if it forms sus2
+                                            upper_intervals = sorted((n - pc) % 12 for n in upper_pcs)
+                                            if upper_intervals == [0, 2, 7]:  # Perfect sus2 pattern
+                                                alt_chord = current_root_name + '2'
+                                                break
 
-                                # Check if the alternative is simpler/better
-                                # Prefer simpler chords (triads over 7ths, 7ths over extended)
-                                current_complexity = self._chord_complexity(best_match)
-                                alt_complexity = self._chord_complexity(alt_chord)
+                            # Check if the alternative is simpler/better
+                            # Prefer simpler chords (triads over 7ths, 7ths over extended)
+                            current_complexity = self._chord_complexity(best_match)
+                            alt_complexity = self._chord_complexity(alt_chord)
 
-                                # Only preserve add9 notation if 9th is doubled (when bass is 9th)
-                                # Example: D E G C (D only in bass) → C/D (simplified)
-                                # Example: D E G C D (D doubled) → Cadd9/D (preserved)
-                                # CRITICAL: Check add9 doubling BEFORE any other simplification logic
-                                add9_handled = False
-                                if current_is_add9:
-                                    # Check if bass is the 9th and if it's doubled
-                                    ninth_interval_simplify = 2
-                                    ninth_pc_simplify = (best_root_pc + ninth_interval_simplify) % 12
-                                    bass_is_ninth_simplify = (lowest_pc == ninth_pc_simplify)
-                                    ninth_count_simplify = sum(1 for note in active_notes if note % 12 == ninth_pc_simplify)
-                                    
-                                    if bass_is_ninth_simplify and ninth_count_simplify > 1:
-                                        # 9th is in bass AND doubled - preserve add9 notation, skip ALL simplification
-                                        # Don't change best_match - keep it as Cadd9
-                                        add9_handled = True  # Prevent all further simplification
-                                        if debug_test1c:
-                                            print(f"      CHECK 3: 9th doubled! bass_is_ninth_simplify={bass_is_ninth_simplify}, ninth_count_simplify={ninth_count_simplify}")
-                                            print(f"        Setting add9_handled=True, best_match stays: {best_match}")
-                                    elif bass_is_ninth_simplify and ninth_count_simplify == 1:
-                                        # 9th is only in bass - allow simplification
-                                        best_match = alt_chord
-                                        add9_handled = True  # Mark as handled
-                                    else:
-                                        # 9th is not in bass - preserve add9 notation, skip all simplification
-                                        add9_handled = True  # Prevent all further simplification
-                                
-                                # Only proceed with other simplification logic if add9 was NOT handled
-                                # CRITICAL: If add9_handled is True, skip ALL simplification logic
-                                if not add9_handled:
-                                    if not current_is_add9:
-                                        # If alternative is sus2 and current is add9, prefer sus2
-                                        # Example: Ebadd9/G with upper Bb Eb F → prefer Eb2/G over Ebadd9/G
-                                        if alt_is_sus and alt_chord.endswith('2') and current_is_add9:
-                                            # Prefer sus2 over add9 for slash chord simplification
-                                            best_match = alt_chord
-                                        # If alternative is sus and current is a basic triad, prefer sus
-                                        elif alt_is_sus and current_is_basic:
-                                            # Keep the sus chord, don't use the simpler triad
-                                            best_match = alt_chord
-                                        # Otherwise use normal simplification logic
-                                        elif alt_complexity <= current_complexity:
-                                            best_match = alt_chord
-                                    # If current_is_add9 and add9_handled is False, something went wrong
-                                    # This shouldn't happen, but if it does, don't simplify
+                            # If alternative is sus2 and current is add9, prefer sus2
+                            # Example: Ebadd9/G with upper Bb Eb F → prefer Eb2/G over Ebadd9/G
+                            if alt_is_sus and alt_chord.endswith('2') and current_is_add9:
+                                # Prefer sus2 over add9 for slash chord simplification
+                                best_match = alt_chord
+                            # If alternative is sus and current is a basic triad, prefer sus
+                            elif alt_is_sus and current_is_basic:
+                                # Keep the sus chord, don't use the simpler triad
+                                best_match = alt_chord
+                            # Otherwise use normal simplification logic
+                            elif alt_complexity <= current_complexity:
+                                best_match = alt_chord
 
                 # Add bass note only if we didn't skip slash notation
                 bass_note_name = self.get_note_name(lowest_pc)
-                if debug_test1c:
-                    print(f"\nFINAL STEP:")
-                    print(f"  best_match before adding bass: {best_match}")
-                    print(f"  bass_note_name: {bass_note_name}")
                 best_match = f"{best_match}/{bass_note_name}"
-                if debug_test1c:
-                    print(f"  best_match after adding bass: {best_match}")
-                    print(f"=== END DEBUG TEST 1c ===\n")
 
         # =====================================================================
         # CHORD VALIDATION - Reject invalid or bad sounding voicings
         # =====================================================================
-        # CRITICAL: Re-check M3+m3/m7+M7 filtering AFTER detection
-        # The pre-detection filter checks for exact matches, but we also need to check
-        # if the detected chord has interval conflicts from the bass
-        # Check if bass has interval conflicts
-        intervals_from_bass_final = set((pc - lowest_pc) % 12 for pc in pitch_classes)
-        has_m3_and_M3_from_bass_final = (3 in intervals_from_bass_final and 4 in intervals_from_bass_final)
-        has_m7_and_M7_from_bass_final = (10 in intervals_from_bass_final and 11 in intervals_from_bass_final)
-        
-        if best_match and best_root_pc is not None and (has_m3_and_M3_from_bass_final or has_m7_and_M7_from_bass_final):
-            intervals_from_bass_check = set((pc - lowest_pc) % 12 for pc in pitch_classes)
-            has_m3_and_M3_from_bass_check = (3 in intervals_from_bass_check and 4 in intervals_from_bass_check)
-            has_m7_and_M7_from_bass_check = (10 in intervals_from_bass_check and 11 in intervals_from_bass_check)
-            
-            if has_m3_and_M3_from_bass_check or has_m7_and_M7_from_bass_check:
-                # Detected chord is from bass root and has interval conflicts
-                # Check if a valid chord can be formed from non-bass roots
-                non_bass_pcs_check = [pc for pc in pitch_classes if pc != lowest_pc]
-                if len(non_bass_pcs_check) >= 2:
-                    slash_chord_valid_check = False
-                    for potential_root in non_bass_pcs_check:
-                        intervals_from_potential_check = sorted((pc - potential_root) % 12 for pc in pitch_classes)
-                        for chord_type_check, pattern_check in CHORD_PATTERNS.items():
-                            if set(pattern_check) == set(intervals_from_potential_check):
-                                slash_chord_valid_check = True
-                                break
-                        if slash_chord_valid_check:
-                            break
-                    
-                    if not slash_chord_valid_check:
-                        # No valid chord from non-bass root - reject ANY chord (bass-root or slash)
-                        return None
-                    
-                    # CRITICAL: Even if a valid slash chord exists, check if the interval conflicts
-                    # from the bass are too severe. Some chords like Gb7(#9,#11)/C with M3+m3 from C
-                    # should still be rejected because the conflicts are musically impossible.
-                    # Exception: Allow if the slash chord is a clear, musically valid interpretation
-                    # like DbmΔ9/C where the conflicts are resolved by the slash chord structure
-                    
-                    # Find the valid slash chord root and type
-                    valid_slash_root = None
-                    valid_slash_chord_type = None
-                    for potential_root in non_bass_pcs_check:
-                        intervals_from_potential_check = sorted((pc - potential_root) % 12 for pc in pitch_classes)
-                        for chord_type_check, pattern_check in CHORD_PATTERNS.items():
-                            if set(pattern_check) == set(intervals_from_potential_check):
-                                valid_slash_root = potential_root
-                                valid_slash_chord_type = chord_type_check
-                                break
-                        if valid_slash_root is not None:
-                            break
-                    
-                    # CRITICAL: Check if ANY valid slash chord (or detected chord) is an altered dominant with conflicts
-                    # Reject altered dominants with #9/#11 when bass has M3+m3 conflicts
-                    # These are often misdetections when there are interval conflicts from bass
-                    # Check both the valid slash chord type AND the detected chord
-                    # CRITICAL: Reject ANY altered dominant with #9/#11 when bass has M3+m3 conflicts
-                    should_reject_altered = False
-                    
-                    # Check valid slash chord type first (this catches the case where we find a valid slash chord)
-                    if valid_slash_chord_type:
-                        chord_type_str = str(valid_slash_chord_type)
-                        if '#9' in chord_type_str or '#11' in chord_type_str:
-                            should_reject_altered = True
-                    
-                    # Also check the detected chord name (catches if best_match is already a slash chord)
-                    if best_match:
-                        if '#9' in best_match or '#11' in best_match:
-                            should_reject_altered = True
-                    
-                    # CRITICAL: Reject altered dominants from non-bass roots when bass has M3+m3 conflicts
-                    # The issue: #9 is enharmonic with b3 (minor 3rd), so C Eb E creates confusion
-                    # Rule: If bass has M3+m3 conflicts AND we detect an altered dominant from a non-bass root,
-                    # reject it because the bass note shouldn't be the root of an altered dominant interpretation
-                    # Example: C Eb F# A C E → Gb7(#9,#11)/C is wrong because C (with M3+m3) disqualifies Gb7
-                    # Valid altered dominants should have the root in the bass or a chord tone in the bass
-                    if should_reject_altered and has_m3_and_M3_from_bass_check:
-                        # Check if the detected chord is from a non-bass root (slash chord)
-                        # If best_root_pc != lowest_pc, we're detecting an altered dominant from a non-bass root
-                        # with M3+m3 conflicts from the bass - this is invalid
-                        # CRITICAL: The bass note having M3+m3 conflicts disqualifies it from being a valid
-                        # bass note for an altered dominant interpretation from a different root
-                        if best_root_pc != lowest_pc:
-                            # Altered dominant from non-bass root with M3+m3 conflicts from bass - reject
-                            # Example: C Eb F# A C E → Gb7(#9,#11)/C is wrong because C has M3+m3 conflicts
-                            return None
-                        # If best_root_pc == lowest_pc, the altered dominant is from the bass root
-                        # This might be valid, but if bass has M3+m3 conflicts, it's still problematic
-                        # However, we should be more lenient here - let it through if it's from bass root
-                        # The pre-detection filter should have caught invalid bass-root interpretations
-                    
-                    # If detected chord is from bass root, re-detect from the valid non-bass root
-                    if best_root_pc == lowest_pc:
-                        if valid_slash_root is not None:
-                            # Re-detect from the valid non-bass root
-                            intervals_from_valid_root = sorted((pc - valid_slash_root) % 12 for pc in pitch_classes)
-                            slash_match_result = self._match_chord_pattern(intervals_from_valid_root, valid_slash_root, active_notes,
-                                                                          highest_note, highest_pc, lowest_pc, has_global_dominant_quality)
-                            if slash_match_result:
-                                slash_chord_name, slash_score = slash_match_result
-                                bass_note_name = self.get_note_name(lowest_pc)
-                                return f"{slash_chord_name}/{bass_note_name}"
-                        
-                        # If we can't re-detect, reject the bass-root interpretation
-                        return None
-                    else:
-                        # Detected chord is already a slash chord from non-bass root
-                        # Check if it matches one of the valid non-bass roots
-                        # If not, reject it (it's an invalid interpretation)
-                        detected_is_valid_slash = False
-                        detected_chord_type = None
-                        for potential_root in non_bass_pcs_check:
-                            intervals_from_potential_check = sorted((pc - potential_root) % 12 for pc in pitch_classes)
-                            for chord_type_check, pattern_check in CHORD_PATTERNS.items():
-                                if set(pattern_check) == set(intervals_from_potential_check) and potential_root == best_root_pc:
-                                    detected_is_valid_slash = True
-                                    detected_chord_type = chord_type_check
-                                    # Found the matching chord type - break out of inner loop
-                                    break
-                            if detected_is_valid_slash:
-                                break
-                        
-                        if not detected_is_valid_slash:
-                            # Detected slash chord doesn't match any valid non-bass root - reject
-                            return None
-                        
-                        # CRITICAL: Check if the detected slash chord is an altered dominant with conflicts
-                        # Reject altered dominants with #9/#11 when bass has M3+m3 conflicts
-                        # This prevents misdetections like Gb7(#9,#11)/C when C has both M3 and m3
-                        chord_type_str = str(detected_chord_type) if detected_chord_type else ''
-                        has_sharp9_or_11_in_type = ('#9' in chord_type_str or '#11' in chord_type_str)
-                        has_sharp9_or_11_in_name = best_match and ('#9' in best_match or '#11' in best_match)
-                        
-                        if (has_sharp9_or_11_in_type or has_sharp9_or_11_in_name) and has_m3_and_M3_from_bass_check:
-                            # Altered dominants with #9/#11 when bass has M3+m3 are likely misdetections
-                            return None
-        
         if best_match and best_root_pc is not None:
             # Validate from the detected CHORD ROOT (not the bass note)
             # This allows valid inversions like C7/Bb while rejecting truly invalid chords
@@ -1828,21 +1537,87 @@ class ChordDetector:
         if should_check_scale_later:
             chord_span = max(original_active_notes) - min(original_active_notes)
 
-            # Try scale detection
-            scale = self.detect_scale(original_active_notes)
+            # Try scale detection (or use early check if available)
+            scale = scale_early_check if scale_early_check else self.detect_scale(original_active_notes)
             if scale:
                 # Scale detected!
-                # EXCEPTION: If a 13th chord was detected, prefer chord over scale
-                # 13th chords are 7-note chords that can look like modes
-                if best_match and ('13' in best_match or 'm13' in best_match):
-                    return best_match  # Prefer 13th chord over scale
+                pitch_classes_count = len(set(note % 12 for note in original_active_notes))
+                
+                # CRITICAL: For modes of major (7 notes) and pentatonic scales (5 notes),
+                # Prefer scale if it's continuous (all scale degrees present, no gaps)
+                # BUT: Extended chords should win if they're clearly chords (not just scale notes)
+                if pitch_classes_count == 7 and ('Ionian' in scale or 'Dorian' in scale or 
+                                                  'Phrygian' in scale or 'Lydian' in scale or
+                                                  'Mixolydian' in scale or 'Aeolian' in scale or
+                                                  'Locrian' in scale):
+                    # Get the scale root and pattern
+                    scale_root_name = scale.split()[0]  # Get root name (e.g., "C" from "C Ionian")
+                    scale_type = scale.split()[1] if len(scale.split()) > 1 else ""
+                    
+                    # Check if best_match is a clear extended chord from the SAME root as the scale
+                    if best_match and best_match.startswith(scale_root_name):
+                        # Extended chord from scale root - check if it's a clear extended chord
+                        if ('13' in best_match or 'm13' in best_match or 
+                            'Δ13' in best_match or 'maj13' in best_match or
+                            '9' in best_match or 'm9' in best_match or
+                            'Δ9' in best_match or 'maj9' in best_match):
+                            # Extended chord from scale root - check if notes are clustered (scale-like)
+                            # If notes are NOT clustered, it's likely a chord voicing, not a scale
+                            is_clustered_notes = self.is_clustered(original_active_notes)
+                            if not is_clustered_notes:
+                                # Notes are spread out (chord voicing) - prefer extended chord
+                                return best_match
+                            # If notes ARE clustered, check if it's a continuous scale pattern
+                            # Find the scale pattern
+                            scale_pattern = None
+                            for pattern_name, pattern in SCALE_PATTERNS.items():
+                                if pattern_name == scale_type:
+                                    scale_pattern = pattern
+                                    break
+                            
+                            if scale_pattern:
+                                # Get the root pitch class
+                                root_pc = None
+                                for pc in range(12):
+                                    if self.get_note_name(pc) == scale_root_name:
+                                        root_pc = pc
+                                        break
+                                
+                                if root_pc is not None:
+                                    # Calculate intervals from root for the input notes (relative to scale root)
+                                    input_pitch_classes = set(note % 12 for note in original_active_notes)
+                                    input_intervals = sorted(set((pc - root_pc) % 12 for pc in input_pitch_classes))
+                                    scale_intervals = sorted(set(scale_pattern))
+                                    
+                                    # Check if input matches scale pattern exactly (continuous scale - all degrees present)
+                                    if input_intervals == scale_intervals:
+                                        # Continuous scale pattern - prefer scale over extended chord
+                                        return scale
+                            # Not a continuous scale pattern - prefer extended chord
+                            return best_match
+                    
+                    # No extended chord from scale root - prefer scale
+                    return scale
+                
+                if pitch_classes_count == 5 and 'Pentatonic' in scale:
+                    return scale  # Pentatonic scales - always prefer scale
+                
+                # EXCEPTION: If extended chords (9th, 13th) were detected, prefer chord over scale
+                # Extended chords are 5-7 note chords that can look like modes
+                # BUT: Only if it's NOT a mode of major or pentatonic (already handled above)
+                if best_match and ('13' in best_match or 'm13' in best_match or 
+                                  'Δ13' in best_match or 'maj13' in best_match or
+                                  '9' in best_match or 'm9' in best_match or
+                                  'Δ9' in best_match or 'maj9' in best_match):
+                    # Only prefer chord if it's not a clear scale pattern
+                    if not (pitch_classes_count == 7 or pitch_classes_count == 5):
+                        return best_match  # Prefer extended chord over scale
 
                 # If span >= 12 semitones (one octave+), ALWAYS prefer scale
                 if chord_span >= 12:
                     return scale
-                # If span < 12, prefer scale only for highly clustered patterns
-                # (allows some chord interpretations for compact voicings)
-                else:
+                # If span < 12, prefer scale for clustered patterns or pentatonic
+                elif self.is_clustered(original_active_notes) or 'Pentatonic' in scale:
                     return scale
 
             # No scale found - return the chord interpretation
@@ -1897,6 +1672,8 @@ class ChordDetector:
             'dim7': 'diminished7',
             'dimΔ7': 'diminished_major7',
             'ø7': 'half_diminished7',
+            'm7b5': 'half_diminished7',  # Alternative notation for half-diminished
+            'hdim7': 'half_diminished7',  # Alternative notation for half-diminished
             '9': 'dominant9',
             '11': 'dominant11',
             '13': 'dominant13',
@@ -2122,18 +1899,41 @@ class ChordDetector:
                                  '7b9', '7#9', '7b13', '7b9b13', '7#9b13', '7#11b13',
                                  '7b9#11', '7#9#11']:
                     completeness_bonus = 60.0  # Even higher for altered dominants
+                # Extra bonus for major7 chords - prefer perfect major7 matches over extended chords from bass
+                # This ensures CΔ7/F is detected as CΔ7/F, not FΔ9#11
+                if chord_type == 'major7':
+                    completeness_bonus = 2000.0  # Very high bonus to beat FΔ9#11 (320) and other extended interpretations
                 # Extra bonus for diminished major 7th (rare chord, should be preferred when exact match)
                 if chord_type == 'diminished_major7':
                     completeness_bonus = 500.0  # Very high to beat m6 interpretations
+                # Extra bonus for sus2 and sus4 triads - prefer over extended sus chords
+                if chord_type in ['sus2', 'sus4']:
+                    if missing_count == 0 and extra_count == 0 and root_pc == lowest_pc:
+                        completeness_bonus = 5000.0  # High bonus to beat extended sus chords (like C13sus)
                 # Extra bonus for half-diminished7 (common jazz chord, should beat minor slash chords and dim triads)
                 if chord_type == 'half_diminished7':
                     completeness_bonus = 700.0  # Extremely high to beat Ebm/C and Ddim/C interpretations
                 # Extra bonus for major7(6/9) to beat simpler 6/9 interpretations
                 if chord_type == 'major7_6_9':
                     completeness_bonus = 200.0  # High bonus to prefer maj7(6/9) over 6/9
+                # USER REQUIREMENT: sus4 triads should beat slash chord interpretations
+                # Example: C F G should be Csus4, not G7sus4/C
+                # Apply bonus when sus4 pattern matches perfectly AND root is in bass
+                if chord_type == 'sus4' and intervals == [0, 5, 7] and root_pc == lowest_pc:
+                    completeness_bonus = 10000.0  # Extremely high bonus to beat all slash chord interpretations
             elif missing_count == 0:
                 # All pattern notes present (extensions allowed)
                 completeness_bonus = 10.0
+                # Extra bonus for major7 when all notes present (even with extra bass note)
+                # This helps CΔ7/F beat FΔ9#11
+                # CRITICAL: Boost major7 significantly when root is NOT in bass (slash chord case)
+                if chord_type == 'major7':
+                    if root_pc != lowest_pc and extra_count <= 1:
+                        # Major7 with non-root bass - boost massively to beat extended chords from bass root
+                        # Example: CΔ7/F should beat FΔ9#11
+                        completeness_bonus = 5000.0  # Very high bonus to beat FΔ9#11 when evaluating CΔ7/F
+                    elif root_pc == lowest_pc and extra_count <= 1:
+                        completeness_bonus = 500.0  # Standard bonus for root position
 
             # 4b. Major 7th bonus - chords with M7 in their PATTERN should beat add9 interpretations
             # User rule: "ANY chord with a M7 (interval 11) automatically preferred over add9"
@@ -2162,7 +1962,14 @@ class ChordDetector:
 
             # Missing optional intervals (root, 5th) - LIGHT penalty or none
             # In jazz, missing root/5th is perfectly acceptable
-            missing_penalty += len(optional_missing) * 1.0  # Minimal penalty
+            # USER REQUIREMENT: Heavy penalty for incomplete 7sus4 missing 5th when sus4 triad is perfect match
+            # Example: C F G - G7sus4 is missing 5th, Csus4 is perfect match
+            if chord_type == '7sus4' and 7 in missing_intervals:
+                # Missing the 5th - this is incomplete 7sus4
+                # Apply heavy penalty to prefer perfect sus4 triad
+                missing_penalty += 5000.0  # Heavy penalty to prefer perfect sus4 triad
+            else:
+                missing_penalty += len(optional_missing) * 1.0  # Minimal penalty for other cases
 
             # Missing other required intervals (not essential, not optional) - MEDIUM penalty
             missing_penalty += len(required_missing) * 8.0
@@ -2209,6 +2016,19 @@ class ChordDetector:
 
                 if not is_sus_type and not is_six_nine and is_true_extended and missing_count <= 1 and extension_present:
                     root_in_bass_bonus += 200.0  # Extra bonus for extended chords
+                    # CRITICAL: Major9 and minor9 need extra boost to beat major7/minor7
+                    if chord_type == 'major9' and has_9th and missing_count == 0 and extra_count == 0:
+                        root_in_bass_bonus += 5000.0  # Very high bonus to beat major7
+                    elif chord_type == 'minor9' and has_9th and missing_count == 0 and extra_count == 0:
+                        root_in_bass_bonus += 5000.0  # Very high bonus to beat minor7 and slash chord interpretations
+                    # CRITICAL: Minor13 needs boost to beat scale detection
+                    elif chord_type == 'minor13' and has_13th and missing_count == 0 and extra_count == 0:
+                        root_in_bass_bonus += 10000.0  # Very high bonus to beat scale detection
+                    # CRITICAL: Major9 and minor9 need extra boost to beat major7/minor7
+                    if chord_type == 'major9' and has_9th and missing_count == 0 and extra_count == 0:
+                        root_in_bass_bonus += 5000.0  # Very high bonus to beat major7
+                    elif chord_type == 'minor9' and has_9th and missing_count == 0 and extra_count == 0:
+                        root_in_bass_bonus += 5000.0  # Very high bonus to beat minor7 and slash chord interpretations
 
                 # Special bonus for diminished7 chords when root is in bass
                 # Since all 4 notes in dim7 are equivalent, prefer the bass note as root
@@ -2269,7 +2089,14 @@ class ChordDetector:
                 # This is dominant quality (either from this root or from another root in the chord)
                 if chord_type.startswith('6') or chord_type.startswith('minor6') or chord_type == 'diminished7' or chord_type == 'diminished':
                     # Penalize 6th chord, m6, and dim interpretations when dominant quality is present
-                    dominant_quality_adjustment = -500.0  # VERY heavy penalty to beat m6 slash chord bonuses
+                    # EXCEPT: Don't penalize perfect m6 matches [0, 3, 7, 9] - they should beat m7b5
+                    # Check if this is the exact m6 pattern
+                    intervals_list = list(intervals) if not isinstance(intervals, list) else intervals
+                    if chord_type.startswith('minor6') and intervals_list == [0, 3, 7, 9]:
+                        # Perfect m6 pattern - don't penalize, let the bonus handle it
+                        dominant_quality_adjustment = 0.0
+                    else:
+                        dominant_quality_adjustment = -500.0  # VERY heavy penalty to beat m6 slash chord bonuses
                 elif (chord_type.startswith('13') or chord_type.startswith('dominant') or
                       chord_type == 'dominant7' or chord_type.startswith('7') or chord_type.startswith('9')):
                     # Bonus for dominant chord interpretations (7, 9, 13, dominant, etc.)
@@ -2295,10 +2122,11 @@ class ChordDetector:
             if chord_type == '7b9b13_no5' and intervals == [0, 1, 4, 8, 10]:
                 special_pattern_bonus = 150.0  # Strong boost for this exact pattern
 
-            # Special case #1c: G7(#9,b13) - G F Bb Cb Eb
+            # Special case #1c: C7(#9,b13) - C E Ab Bb D# (no 5th)
             # Exact pattern [0, 3, 4, 8, 10] as 7#9b13_no5
+            # Must beat EΔ7(#11) and other major7#11 interpretations
             if chord_type == '7#9b13_no5' and intervals == [0, 3, 4, 8, 10]:
-                special_pattern_bonus = 150.0  # Strong boost for this exact pattern
+                special_pattern_bonus = 5000.0  # Very high boost to beat major7#11 interpretations
 
             # Special case #1d: C7(b9,#11) - C Bb Db E F#
             # Exact pattern [0, 1, 4, 6, 10] as 7b9#11_no5
@@ -2309,6 +2137,18 @@ class ChordDetector:
             # Exact pattern [0, 1, 4, 7, 9, 10] as 13b9
             if chord_type == '13b9' and intervals == [0, 1, 4, 7, 9, 10]:
                 special_pattern_bonus = 500.0  # Very strong boost to beat regular C13
+
+            # USER REQUIREMENT: C7#9 should beat EΔ7(#11)
+            # C7#9 pattern: [0, 3, 4, 7, 10] (C E G Bb Eb)
+            # This is an altered dominant and should have high priority
+            if chord_type == '7#9' and intervals == [0, 3, 4, 7, 10]:
+                special_pattern_bonus = 2000.0  # Very high bonus to beat EΔ7(#11) interpretations
+
+            # USER REQUIREMENT: sus4 triads should beat slash chord interpretations
+            # Example: C F G should be Csus4, not G7sus4/C
+            # Apply special pattern bonus when sus4 pattern matches perfectly AND root is in bass
+            if chord_type == 'sus4' and intervals == [0, 5, 7] and root_pc == lowest_pc:
+                special_pattern_bonus = 10000.0  # Extremely high bonus to beat all slash chord interpretations
 
             # Special handling for m6 slash chord pattern: bass + [1, 7, 10] = X Xb/bass
             # Example: C Bb Db G from C has intervals [0, 1, 7, 10], should be Bbm6/C
@@ -2331,67 +2171,88 @@ class ChordDetector:
             if chord_type in ['6_no5', '6'] and root_pc == lowest_pc and intervals == [0, 4, 9]:
                 special_pattern_bonus = 100.0  # Strong boost to prefer 6th over minor inversion
 
-            # Special case #1f: add9 chords - boost perfect matches to prefer over simple triads
-            # Example: C D E G should be Cadd9, not C (major triad)
-            # Example: D E G C (span < octave) should be Cadd9/D, not C/D or D9sus
-            if chord_type == 'add9' and missing_count == 0 and extra_count == 0:
-                # Perfect add9 match - give bonus to beat simple triad interpretations
-                # Start with high base bonus to ensure add9 beats major triad
-                special_pattern_bonus = 200.0  # High boost to prefer add9 over major triad
+            # Special case #1f: add9 chords - use chord span to decide add9/bass vs 9sus
+            # Example: D E G C (span < octave) should be Cadd9/D, not D9sus
+            # Example: D E G C (span >= octave) should be D9sus
+            # USER REQUIREMENT: If bass is the 4th of the add9 root, prefer add9/bass
+            # Example: Cadd9/F where F is the 4th of C → Cadd9/F
+            # Allow extra_count == 1 if the extra is the 4th (bass note)
+            if chord_type == 'add9' and missing_count == 0:
                 # Check if this is a slash chord (root != bass)
                 if root_pc != lowest_pc:
-                    # Check if this could be 9sus from the bass
-                    intervals_from_lowest_check = sorted((pc - lowest_pc) % 12 for pc in set(note % 12 for note in active_notes))
-                    if intervals_from_lowest_check == [0, 2, 5, 10]:
-                        # This is the 9sus pattern from bass
-                        # Check if the add9 interpretation has a complete major/minor triad (M3 or m3 + P5)
-                        # For add9: root, M3, P5, 9
-                        has_major_third = (4 in intervals)  # M3 from root
-                        has_minor_third = (3 in intervals)  # m3 from root
-                        has_perfect_fifth = (7 in intervals)  # P5 from root
+                    # USER REQUIREMENT: If bass is the 4th of the add9 root, strongly prefer add9/bass
+                    bass_interval_from_root = (lowest_pc - root_pc) % 12
+                    bass_is_fourth = (bass_interval_from_root == 5)  # Perfect 4th = 5 semitones
+                    
+                    if bass_is_fourth:
+                        # USER REQUIREMENT: Bass is the 4th of add9 root → Xadd9/Y format
+                        # Example: Cadd9/F where F is 4th of C
+                        # Allow extra_count == 1 if the extra is the 4th (bass note)
+                        if extra_count == 0 or (extra_count == 1 and 5 in intervals):
+                            # Apply very high bonus to beat other interpretations (G7sus4/F, etc.)
+                            # This bonus must be high enough to overcome any extra note penalty
+                            special_pattern_bonus = 10000.0  # Very high bonus to definitely beat G7sus4/F
+                            # DEBUG: Print when this bonus is applied
+                            DEBUG_ADD9_4TH = False  # Set to True for debugging
+                            if DEBUG_ADD9_4TH:
+                                print(f"DEBUG add9/4th: root={self.get_note_name(root_pc)}, bass={self.get_note_name(lowest_pc)}, "
+                                      f"extra_count={extra_count}, intervals={intervals}, bonus={special_pattern_bonus}")
+                        else:
+                            # Extra is not the 4th - continue with normal logic
+                            pass
+                    
+                    if extra_count == 0:
+                        # Check if this could be 9sus from the bass
+                        intervals_from_lowest_check = sorted((pc - lowest_pc) % 12 for pc in set(note % 12 for note in active_notes))
+                        if intervals_from_lowest_check == [0, 2, 5, 10]:
+                            # This is the 9sus pattern from bass
+                            # Check if the add9 interpretation has a complete major/minor triad (M3 or m3 + P5)
+                            # For add9: root, M3, P5, 9
+                            has_major_third = (4 in intervals)  # M3 from root
+                            has_minor_third = (3 in intervals)  # m3 from root
+                            has_perfect_fifth = (7 in intervals)  # P5 from root
 
-                        if (has_major_third or has_minor_third) and has_perfect_fifth:
-                            # Has M3/m3 and P5 - BUT check if all triad tones are actually present
-                            # We need root + 3rd + 5th all present in the chord
-                            # The intervals list is from the add9 root, so if 0, 3/4, and 7 are all present, it's complete
-                            triad_complete = (0 in intervals) and (3 in intervals or 4 in intervals) and (7 in intervals)
+                            if (has_major_third or has_minor_third) and has_perfect_fifth:
+                                # Has M3/m3 and P5 - BUT check if all triad tones are actually present
+                                # We need root + 3rd + 5th all present in the chord
+                                # The intervals list is from the add9 root, so if 0, 3/4, and 7 are all present, it's complete
+                                triad_complete = (0 in intervals) and (3 in intervals or 4 in intervals) and (7 in intervals)
 
-                            if triad_complete:
-                                # ALL three triad notes present - strong triadic center
-                                # Example: D E G C = Cadd9 has C(0) E(4) G(7) all present
-                                # Check if bass is part of the triad (not just the 9th)
-                                # Triad intervals from root: [0, 3/4, 7]
-                                bass_interval_from_root = (lowest_pc - root_pc) % 12
-                                bass_is_triad_tone = bass_interval_from_root in [0, 3, 4, 7]
+                                if triad_complete:
+                                    # ALL three triad notes present - strong triadic center
+                                    # Example: D E G C = Cadd9 has C(0) E(4) G(7) all present
+                                    # Check if bass is part of the triad (not just the 9th)
+                                    # Triad intervals from root: [0, 3/4, 7]
+                                    bass_is_triad_tone = bass_interval_from_root in [0, 3, 4, 7]
 
-                                if not bass_is_triad_tone:
-                                    # Bass is NOT part of the triad (it's the 9th)
-                                    # Key: check interval from bass to highest note
-                                    highest_interval_from_bass = (max(active_notes) - min(active_notes))
+                                    if not bass_is_triad_tone:
+                                        # Bass is NOT part of the triad (it's the 9th)
+                                        # Key: check interval from bass to highest note
+                                        highest_interval_from_bass = (max(active_notes) - min(active_notes))
 
-                                    if highest_interval_from_bass < 12:
-                                        # All within octave from bass - complete triad with added 9th in bass
-                                        # D E G C: D to C = 10 semitones (minor 7th) < 12 → Cadd9/D
-                                        special_pattern_bonus = 6200.0  # Beat 9sus when span >= 12 (6000 + base)
+                                        if highest_interval_from_bass < 12:
+                                            # All within octave from bass - complete triad with added 9th in bass
+                                            # D E G C: D to C = 10 semitones (minor 7th) < 12 → Cadd9/D
+                                            special_pattern_bonus = 6200.0  # Beat 9sus when span >= 12 (6000 + base)
+                                        else:
+                                            # Spread beyond octave from bass - prefer 9sus interpretation
+                                            # C Bb D F: C to F (octave up) >= 12 → loses to C9sus
+                                            special_pattern_bonus = 150.0  # Lose to 9sus
                                     else:
-                                        # Spread beyond octave from bass - prefer 9sus interpretation
-                                        # C Bb D F: C to F (octave up) >= 12 → loses to C9sus
-                                        special_pattern_bonus = 150.0  # Lose to 9sus
+                                        # Bass IS part of the triad - less clear slash chord
+                                        special_pattern_bonus = 4200.0  # Might lose to 9sus
                                 else:
-                                    # Bass IS part of the triad - less clear slash chord
-                                    special_pattern_bonus = 4200.0  # Might lose to 9sus
+                                    # Triad incomplete - don't strongly prefer this interpretation
+                                    special_pattern_bonus = 150.0
                             else:
-                                # Triad incomplete - don't strongly prefer this interpretation
+                                # No triad - don't boost
                                 special_pattern_bonus = 150.0
                         else:
-                            # No triad - don't boost
+                            # Not a 9sus pattern from bass - standard add9 boost
                             special_pattern_bonus = 150.0
-                    else:
-                        # Not a 9sus pattern from bass - standard add9 boost
-                        special_pattern_bonus = 200.0  # High boost to prefer add9
                 else:
                     # Root in bass - standard add9 boost
-                    special_pattern_bonus = 200.0  # High boost to prefer add9
+                    special_pattern_bonus = 150.0
 
             # Special case #1f0: minor_add9 perfect match should beat minor triad inversions
             # Example: G C D Eb should be Cmadd9/G, not Cm/G
@@ -2403,15 +2264,16 @@ class ChordDetector:
             # Example: C Bb Db G = Bbm6/C (not Gdim/C)
             # Specific pattern: when intervals are [0, 2, 3, 9] (m6_no5 with added 9) from root with different bass
             # BUT: Don't boost m6 if we have dominant quality (M3 + m7 present)
+            # NOTE: This bonus is applied BEFORE the general m6 bonus at line 2066, so we use += to accumulate
             if chord_type in ['minor6', 'minor6_no5', 'minor6_9', 'minor6_9_no5'] and root_pc != lowest_pc and not has_global_dominant_quality:
                 # This is a slash chord with m6 quality - boost heavily to beat dim
                 unique_pcs_m6_check = len(set(note % 12 for note in active_notes))
                 if 3 in intervals_set and 9 in intervals_set and unique_pcs_m6_check == 4:  # m3 + M6 present, exactly 4 notes
                     # Extra strong boost for this specific pattern
                     if intervals == [0, 2, 3, 9]:  # Exact pattern like Bbm6 with added 9
-                        special_pattern_bonus = 600.0  # Extremely strong boost for exact m6 pattern
+                        special_pattern_bonus += 600.0  # Extremely strong boost for exact m6 pattern
                     else:
-                        special_pattern_bonus = 400.0  # Very strong boost for m6 slash chords (4 notes only)
+                        special_pattern_bonus += 400.0  # Very strong boost for m6 slash chords (4 notes only)
 
             # Special case #1f2: half-diminished7 should beat 7#11 when it's a perfect match
             # Example: Ab Cb D F# should be Abø7, not Ab7#11
@@ -2435,12 +2297,36 @@ class ChordDetector:
             if chord_type in ['major7#11', 'major7#11_no5', 'major9#11', 'major13#11']:
                 # Only boost if #11 (6) is actually present
                 if 6 in intervals_set:
-                    # Perfect match gets massive bonus
-                    if missing_count == 0 and extra_count == 0:
-                        special_pattern_bonus = 250.0  # Beat all altered dominants
-                    # Even without perfect match, boost significantly
-                    elif missing_count <= 1:
-                        special_pattern_bonus = 150.0
+                    # Check if 13th (9) is present - prefer major13#11 over major9#11
+                    if 9 in intervals_set and chord_type == 'major13#11':
+                        # Perfect major13#11 match - boost significantly to beat major9#11 and scale detection
+                        if missing_count == 0 and extra_count == 0:
+                            special_pattern_bonus = 10000.0  # Very high bonus to beat major9#11 and scale detection
+                        elif missing_count <= 1:
+                            special_pattern_bonus = 8000.0
+                    # Check if 9th (2) is present - prefer major9#11 over major7#11
+                    elif 2 in intervals_set and chord_type == 'major9#11':
+                        # Perfect major9#11 match - boost significantly to beat major7#11
+                        if missing_count == 0 and extra_count == 0:
+                            special_pattern_bonus = 600.0  # Beat major7#11 (250) and other interpretations
+                        elif missing_count <= 1:
+                            missing_intervals_set = pattern_set - intervals_set
+                            if missing_intervals_set == {7}:  # Only 5th missing
+                                special_pattern_bonus = 700.0  # Very high bonus - 9th + #11 is important
+                            else:
+                                special_pattern_bonus = 500.0
+                    else:
+                        # Perfect match gets massive bonus
+                        if missing_count == 0 and extra_count == 0:
+                            special_pattern_bonus = 250.0  # Beat all altered dominants
+                        # Even without perfect match, boost significantly (5th is optional for extended chords)
+                        elif missing_count <= 1:
+                            # Check if only the 5th is missing (interval 7)
+                            missing_intervals_set = pattern_set - intervals_set
+                            if missing_intervals_set == {7}:  # Only 5th missing
+                                special_pattern_bonus = 500.0  # Very high bonus - #11 is more important than 5th, beat CΔ9 (408)
+                            else:
+                                special_pattern_bonus = 300.0  # High bonus even if other notes missing
 
             # Special case #2b: F A B E → F maj7#11 (not B7#11)
             # Exact pattern [0, 4, 6, 11] as major7#11_no5
@@ -2484,27 +2370,83 @@ class ChordDetector:
             # When we have m3 + M6, prefer m6 over m7b5
             # BUT: Don't apply for 3-note chords (could be diminished from another root)
             # ONLY apply to EXACTLY 4-note chords to avoid breaking 13#11 and other extended chords
+            # CRITICAL FIX: This bonus MUST be applied unconditionally for m6 chords to beat m7b5
+            # Check for m6 pattern: intervals [0, 3, 7, 9] = root, m3, P5, M6
             unique_pcs = len(set(note % 12 for note in active_notes))
-            if 3 in intervals_set and 9 in intervals_set and unique_pcs == 4:  # m3 + M6 present, exactly 4 notes
-                if chord_type in ['minor6', 'minor6_no5', 'minor6_9', 'minor6_9_no5']:
-                    # Extra bonus for actual m6 chord types
-                    if missing_count == 0 and extra_count == 0:
-                        special_pattern_bonus = 450.0  # Beat m7b5 and dim interpretations strongly
-                    elif missing_count <= 1 and extra_count <= 2:
-                        special_pattern_bonus = 410.0  # Beat m7b5 and dim interpretations
-                else:
-                    # General bonus for any chord with m3 + M6 intervals
+            is_m6_pattern = (3 in intervals_set and 9 in intervals_set and unique_pcs == 4 and 
+                            set(intervals) == {0, 3, 7, 9})  # Exact m6 pattern
+            if is_m6_pattern and chord_type in ['minor6', 'minor6_no5', 'minor6_9', 'minor6_9_no5']:
+                # Perfect m6 match - set high bonus to beat m7b5 (1040)
+                # Base score ~590-640, need bonus of at least 400 to beat 1040
+                if missing_count == 0 and extra_count == 0:
+                    # CRITICAL: Overwrite any previous bonus to ensure m6 beats m7b5
+                    # Set to a value that will definitely beat m7b5's 1040
+                    special_pattern_bonus = 500.0  # Large bonus to beat m7b5 (1040) - m6 should score ~1090-1140
+                elif missing_count <= 1 and extra_count <= 2:
+                    special_pattern_bonus = 460.0  # Beat m7b5 interpretations
+            elif 3 in intervals_set and 9 in intervals_set and unique_pcs == 4:  # m3 + M6 present, exactly 4 notes
+                # General bonus for any chord with m3 + M6 intervals (not m6 chord type)
+                if special_pattern_bonus == 0.0:  # Only set if no other bonus was set
                     special_pattern_bonus = 380.0  # Boost m3+M6 combinations over dim
 
             # Special case #2d: 13th chord shells should beat major7#11 from different roots
             # When root is in bass and we have dominant quality (M3 + m7 + 13)
+            # Example: C13 (C D E A Bb) should beat BbΔ9#11
             if chord_type in ['13_shell', '13_no5_no11', '13_no5'] and root_pc == lowest_pc:
                 # Check if we have the essential intervals for 13 chord: M3, m7, 13
                 if 4 in intervals_set and 10 in intervals_set and 9 in intervals_set:
                     if missing_count == 0 and extra_count == 0:
-                        special_pattern_bonus = 250.0  # Beat major7#11 from other roots
+                        special_pattern_bonus = 5000.0  # Very high boost to beat major7#11 from other roots
                     elif missing_count <= 1:
-                        special_pattern_bonus = 180.0
+                        special_pattern_bonus = 3000.0
+            
+            # Special case #2e: Dominant 13#11 should beat regular 13
+            # Example: C13#11 (C Bb E F# A) should beat C13
+            # Pattern [0, 4, 6, 9, 10] matches 13#11_no9_no5
+            # CRITICAL: C13#11 should ALWAYS beat C13 when #11 is present
+            if chord_type in ['13#11_no3_no5', '13#11_no9_no5', '13#11_no5'] and root_pc == lowest_pc:
+                # Check if we have M3, m7, #11, and 13 (9th is optional for 13#11_no9_no5)
+                if 4 in intervals_set and 10 in intervals_set and 6 in intervals_set and 9 in intervals_set:
+                    # Perfect match for 13#11 - massive bonus to beat regular 13 (which has 5000.0)
+                    special_pattern_bonus = 20000.0  # Extremely high boost to absolutely beat regular 13
+                elif 4 in intervals_set and 10 in intervals_set and 6 in intervals_set:
+                    # Has #11 but missing 13th - still boost significantly
+                    special_pattern_bonus = 15000.0
+            
+            # Special case #2f: Minor9 should beat slash chord interpretations
+            # Example: Cm9 (C Eb G Bb D) should beat EbΔ7/C
+            if chord_type == 'minor9' and root_pc == lowest_pc:
+                # Check if we have m3, m7, and 9th
+                if 3 in intervals_set and 10 in intervals_set and 2 in intervals_set:
+                    if missing_count == 0 and extra_count == 0:
+                        special_pattern_bonus = 5000.0  # Very high boost to beat EbΔ7/C
+                    elif missing_count <= 1:
+                        special_pattern_bonus = 3000.0
+            
+            # Special case #2f1: Minor7 inversions should beat extended chord interpretations from bass
+            # Example: Cm7/G (G Bb C Eb) should beat Gm11 (which has 8000.0 bonus)
+            # CRITICAL: This must happen BEFORE other checks to ensure Cm7/G wins
+            if chord_type == 'minor7' and root_pc != lowest_pc:
+                # Check if we have m3, m7, and root is not in bass
+                if 3 in intervals_set and 10 in intervals_set:
+                    # Calculate bass interval from root
+                    bass_interval_from_root = (lowest_pc - root_pc) % 12
+                    # If bass is 5th (interval 7), boost significantly to beat Gm11 (8000.0)
+                    if bass_interval_from_root == 7:
+                        if missing_count == 0 and extra_count == 0:
+                            special_pattern_bonus = 25000.0  # Extremely high boost to absolutely beat Gm11
+                        elif missing_count <= 1:
+                            special_pattern_bonus = 20000.0
+            
+            # Special case #2g: Minor13 should beat scale detection
+            # Example: Cm13 (C Eb G Bb D F A) should beat C Dorian
+            if chord_type == 'minor13' and root_pc == lowest_pc:
+                # Check if we have m3, m7, and 13th
+                if 3 in intervals_set and 10 in intervals_set and 9 in intervals_set:
+                    if missing_count == 0 and extra_count == 0:
+                        special_pattern_bonus = 10000.0  # Very high boost to beat scale detection
+                    elif missing_count <= 1:
+                        special_pattern_bonus = 8000.0
 
             # Special case #2e: E A Bb D → Em7b5(11) (specific voicing with A as 2nd note)
             # Check if this is the specific voicing: E in bass, A as 2nd note, pattern [0, 5, 6, 10]
@@ -2522,12 +2464,36 @@ class ChordDetector:
             intervals_from_lowest = sorted((pc - lowest_pc) % 12 for pc in pitch_classes_set)
 
             # Special case #2f: Dominant 7#11 and 13#11 voicings should beat other interpretations
+            # NOTE: This is a lower-priority check - the higher-priority check above (line 2310) should handle C13#11
+            # This check is for cases where the higher-priority check didn't match
             if chord_type in ['7#11_no5', '7#11_no3_no5', '13#11_no3_no5', '13#11_no9_no5', '13#11_no5'] and root_pc == lowest_pc:
-                if 10 in intervals_set and 6 in intervals_set:  # m7 and #11 present
-                    if missing_count == 0 and extra_count == 0:
-                        special_pattern_bonus = 250.0  # Beat other interpretations
-                    elif missing_count <= 1:
-                        special_pattern_bonus = 180.0
+                # Only apply if the higher-priority check (line 2310) didn't already set a bonus
+                if special_pattern_bonus < 10000.0:  # Only if bonus wasn't already set high
+                    if 10 in intervals_set and 6 in intervals_set:  # m7 and #11 present
+                        if missing_count == 0 and extra_count == 0:
+                            special_pattern_bonus = 250.0  # Beat other interpretations
+                        elif missing_count <= 1:
+                            special_pattern_bonus = 180.0
+            
+            # Special case #2f2: Dominant 7#11 and 7b13 with full voicing should beat other interpretations
+            if chord_type in ['7#11', '7b13'] and root_pc == lowest_pc:
+                if missing_count == 0 and extra_count == 0:
+                    # Perfect match - boost significantly to beat major7#11 and other interpretations
+                    if chord_type == '7#11' and 10 in intervals_set and 6 in intervals_set:  # m7 and #11 present
+                        # Check if intervals match the exact 7#11 pattern [0, 4, 7, 10, 6]
+                        if sorted(intervals) == [0, 4, 6, 7, 10]:  # Sorted version of [0, 4, 7, 10, 6]
+                            special_pattern_bonus = 5000.0  # Massive bonus to beat all other interpretations
+                        else:
+                            special_pattern_bonus = 400.0  # Beat major7#11 (250) and other interpretations
+                    elif chord_type == '7b13' and 10 in intervals_set and 8 in intervals_set:  # m7 and b13 present
+                        # Check if intervals match the exact 7b13 pattern [0, 4, 7, 10, 8]
+                        if sorted(intervals) == [0, 4, 7, 8, 10]:  # Sorted version of [0, 4, 7, 10, 8]
+                            special_pattern_bonus = 5000.0  # Massive bonus to beat all other interpretations
+                        else:
+                            special_pattern_bonus = 400.0  # Beat major7#11 and other interpretations
+                elif missing_count <= 1 and extra_count == 0:
+                    # Near-perfect match
+                    special_pattern_bonus = 300.0
 
             # Special case #2g: minor11 chords beat scale interpretations
             if chord_type in ['minor11', 'minor11_no5', 'minor11_no9', 'minor11_shell']:
@@ -2535,18 +2501,91 @@ class ChordDetector:
                     special_pattern_bonus = 8000.0  # Huge bonus to beat scale detection (6000), but lose to Cmaj7(6/9) (10000)
 
             # Special case #2h: 9sus and 13sus chords with root in bass beat slash chord interpretations
+            # Only apply bonus when it's actually a sus chord pattern (has sus intervals, no 3rd)
             if chord_type in ['9sus', '9sus_with5', '13sus', '13sus_with5']:
-                if missing_count == 0 and extra_count == 0 and root_pc == lowest_pc:
-                    # Root in bass - check span from bass to highest note
-                    highest_interval_from_bass = (max(active_notes) - min(active_notes))
-                    if highest_interval_from_bass >= 12:
-                        # Spread beyond octave from bass - strong 9sus voicing
-                        # C Bb D F: C to F (octave up) >= 12 → C9sus
-                        special_pattern_bonus = 6400.0  # Beat add9/bass within octave (6200 + base)
-                    else:
-                        # Within octave from bass - weaker, let add9 triad interpretation win
-                        # C Bb D F: if all within octave from C, might be ambiguous
-                        special_pattern_bonus = 150.0  # Lose to add9/bass with complete triad
+                # Check if this is actually a sus chord (has 2nd/4th instead of 3rd)
+                has_sus_interval = (2 in intervals_set or 5 in intervals_set)  # 2nd or 4th present
+                has_no_third = (3 not in intervals_set and 4 not in intervals_set)  # No major or minor 3rd
+                
+                # For sus chords, root MUST be in bass to get bonus (prevents false positives)
+                if root_pc == lowest_pc and has_sus_interval and has_no_third:
+                    # Check if intervals match the exact sus chord pattern
+                    intervals_list = list(intervals) if isinstance(intervals, (list, tuple)) else sorted(intervals)
+                    intervals_sorted = sorted(intervals_list)
+                    
+                    # CRITICAL: Check if notes can form a SIMPLE triad (major or minor) from a different root
+                    # If so, prefer slash chord notation over sus chord interpretation
+                    # Example: G F A C → F/G (not G9sus)
+                    # BUT: Don't prevent bonus for extended chords like add9 (C9sus ≠ Bbadd9/C)
+                    can_form_simple_triad_slash = False
+                    pitch_classes_set_check = set(note % 12 for note in active_notes)
+                    # Check if removing the bass note leaves exactly 3 notes that form a simple triad
+                    non_bass_pcs = pitch_classes_set_check - {lowest_pc % 12}
+                    if len(non_bass_pcs) == 3:  # Exactly 3 notes (simple triad)
+                        # Check if these 3 notes form a major or minor triad from any of them as root
+                        for test_root_pc in non_bass_pcs:
+                            test_intervals = sorted((pc - test_root_pc) % 12 for pc in non_bass_pcs)
+                            test_intervals_set = set(test_intervals)
+                            # Major triad: [0, 4, 7] or Minor triad: [0, 3, 7]
+                            if test_intervals_set == {0, 4, 7} or test_intervals_set == {0, 3, 7}:
+                                can_form_simple_triad_slash = True
+                                break
+                    
+                    # Apply bonus for perfect sus chord matches
+                    # CRITICAL: Prefer perfect sus chord matches over extended slash chords
+                    # Example: C9sus should beat Bbadd9/C (sus chord is the intended interpretation)
+                    # BUT: Prefer simple triad slash chords over sus chords when both are possible
+                    # Example: F/G should beat G9sus (simple triad slash is clearer)
+                    # The key: Check if the simple triad root is the LOWEST of the non-bass notes
+                    # For F/G: Non-bass is F A C, F is lowest → simple triad slash → don't apply bonus
+                    # For C9sus: Non-bass is D F Bb, Bb is lowest BUT Bbadd9/C is detected (extended) → apply bonus
+                    if chord_type == '9sus' and intervals_sorted == [0, 2, 5, 10]:
+                        # Perfect C9sus match
+                        # Only skip bonus if simple triad slash is possible AND the triad root is lowest non-bass note
+                        should_skip_bonus = False
+                        if can_form_simple_triad_slash and root_pc == lowest_pc:
+                            # Find which note is the simple triad root
+                            simple_triad_root = None
+                            for test_root_pc in non_bass_pcs:
+                                test_intervals = sorted((pc - test_root_pc) % 12 for pc in non_bass_pcs)
+                                test_intervals_set = set(test_intervals)
+                                if test_intervals_set == {0, 4, 7} or test_intervals_set == {0, 3, 7}:
+                                    simple_triad_root = test_root_pc
+                                    break
+                            
+                            # Check if simple triad root is the lowest non-bass note
+                            if simple_triad_root is not None:
+                                lowest_non_bass = min(non_bass_pcs)
+                                if simple_triad_root == lowest_non_bass:
+                                    # Simple triad root is lowest non-bass → true simple triad slash (F/G)
+                                    should_skip_bonus = True
+                        
+                        if should_skip_bonus:
+                            special_pattern_bonus = 0.0  # No bonus - prefer simple triad slash (F/G over G9sus)
+                        else:
+                            special_pattern_bonus = 20000.0  # Full bonus - prefer sus chord (C9sus over Bbadd9/C)
+                    elif chord_type == '9sus_with5' and intervals_sorted == [0, 2, 5, 7, 10]:
+                        if can_form_simple_triad_slash and root_pc == lowest_pc:
+                            special_pattern_bonus = 0.0
+                        else:
+                            special_pattern_bonus = 20000.0
+                    elif chord_type == '13sus' and intervals_sorted == [0, 2, 5, 9, 10]:
+                        # Perfect C13sus match
+                        if can_form_simple_triad_slash and root_pc == lowest_pc:
+                            special_pattern_bonus = 0.0
+                        else:
+                            special_pattern_bonus = 20000.0
+                    elif chord_type == '13sus_with5' and intervals_sorted == [0, 2, 5, 7, 9, 10]:
+                        if can_form_simple_triad_slash and root_pc == lowest_pc:
+                            special_pattern_bonus = 0.0
+                        else:
+                            special_pattern_bonus = 20000.0
+                    # DO NOT apply bonus for non-perfect matches - prevents Csus2 from being detected as C13sus
+                    # Only exact pattern matches get the bonus
+                elif root_pc != lowest_pc:
+                    # Sus chord from non-bass root - penalize heavily to prevent false positives
+                    # This ensures Bb9sus doesn't beat C9sus when C is in bass
+                    special_pattern_bonus = -10000.0  # Very large penalty
 
             # Special case #2i: 7b9#11 with extensions should beat scale/other interpretations
             if chord_type == '7b9#11_13_no5' and missing_count == 0 and extra_count == 0:
@@ -2652,11 +2691,119 @@ class ChordDetector:
                         # Simple triad or 6th not highest - prefer minor triad inversion
                         inversion_bonus = -40.0
 
+            # FINAL CHECK: Ensure m6 chords beat m7b5 - apply bonus right before score calculation
+            # This ensures no other logic can overwrite the bonus
+            # CRITICAL: Check if intervals match m6 pattern [0, 3, 7, 9] exactly
+            # intervals is List[int] parameter, should already be sorted
+            # CRITICAL: Final check for m6 pattern [0, 3, 7, 9] - apply bonus right before score calc
+            # This is the absolute last check, so nothing can overwrite it
+            # Check intervals directly - intervals is List[int], should already be sorted
+            # 
+            # USER REQUIREMENT: m6/m7b5 Distinction Rule
+            # ===========================================
+            # m6 and m7b5 chords are enharmonically equivalent (same notes, different roots):
+            #   - Bbm6 (Bb Db F G) = Gm7b5 (G Bb Db F)
+            #   - The m7b5 root is the 6th of the m6 chord (interval 9 = major 6th)
+            #   - The m6 root is the m3 above the m7b5 root
+            #
+            # UNCONDITIONAL RULE: If bass is the 6th of a perfect m6 match, prefer m7b5
+            #   - Example: G Bb Db F with G in bass → Gm7b5 (G is the 6th of Bbm6)
+            #   - Example: Bb Db F G with Db in bass → Bbm6 (Db is NOT the 6th)
+            #   - Example: Bb Db F G with Bb in bass → Bbm6 (Bb is the root, not the 6th)
+            #
+            # This ensures transposability: Em7b5 and Gm7b5 both work correctly
+            # The rule is checked from both m6 and m7b5 root perspectives for consistency
+            #
+            if list(intervals) == [0, 3, 7, 9]:
+                # Perfect m6 pattern match - check if chord_type is m6
+                chord_type_str = str(chord_type)
+                is_m6_chord = ('minor6' in chord_type_str)
+                if is_m6_chord:
+                    # CRITICAL RULE: If bass is the 6th of the m6 chord, prefer m7b5 interpretation
+                    # The 6th of m6 is interval 9 (major 6th), which is the root of the equivalent m7b5
+                    # For Bbm6: 6th is G (Bb + 9 semitones), which is root of Gm7b5
+                    # This is unconditional - if bass = 6th of m6, it's m7b5
+                    # If bass ≠ 6th of m6, prefer m6 (apply bonus)
+                    m6_sixth_pc = (root_pc + 9) % 12  # Major 6th interval
+                    if lowest_pc % 12 == m6_sixth_pc:
+                        # Bass is the 6th of m6 → this is actually m7b5
+                        # Don't apply bonus, let m7b5 win naturally
+                        # Set bonus to 0 or negative to ensure m7b5 wins
+                        # Apply very large penalty to ensure m7b5 wins (m7b5 gets +2000 bonus)
+                        special_pattern_bonus = -3000.0  # Extremely large penalty to ensure m7b5 wins
+                    else:
+                        # Bass is NOT the 6th of m6 → prefer m6 interpretation
+                        # Apply bonus unconditionally
+                        special_pattern_bonus = 1000.0  # Large bonus to beat m7b5 (1040)
+
+            # CRITICAL: Also check when evaluating from m7b5 root - prefer m7b5 over m6
+            # This ensures transposability: Em7b5 and Gm7b5 should both work
+            # Check if intervals match m7b5 pattern [0, 3, 6, 10] exactly
+            # 
+            # This mirrors the m6 rule from the m7b5 root perspective:
+            #   - If m7b5 root is in bass (the 6th of equivalent m6), prefer m7b5
+            #   - This ensures consistent behavior regardless of which root is evaluated first
+            #
+            if list(intervals) == [0, 3, 6, 10]:
+                chord_type_str = str(chord_type)
+                is_m7b5_chord = ('half_diminished7' in chord_type_str)
+                if is_m7b5_chord:
+                    # Find the equivalent m6 root (m3 ABOVE m7b5 root)
+                    # For Gm7b5, equivalent m6 is Bbm6 (Bb is m3 above G)
+                    m6_root_pc = (root_pc + 3) % 12
+                    
+                    # Check if m6 is a valid interpretation
+                    pitch_classes_set = set(note % 12 for note in active_notes)
+                    intervals_from_m6 = sorted((pc - m6_root_pc) % 12 for pc in pitch_classes_set)
+                    is_good_m6_match = (intervals_from_m6 == [0, 3, 7, 9])
+                    m6_root_appears = any(note % 12 == m6_root_pc for note in active_notes)
+                    
+                    # Find all occurrences of each root in the actual voicing
+                    m7b5_root_notes = [n for n in active_notes if n % 12 == root_pc]
+                    m6_root_notes = [n for n in active_notes if n % 12 == m6_root_pc]
+                    
+                    # Check various conditions
+                    m7b5_root_in_bass = (root_pc == (lowest_pc % 12))
+                    m6_root_in_bass = (m6_root_pc == (lowest_pc % 12))
+                    m7b5_root_count = len(m7b5_root_notes)
+                    m6_root_count = len(m6_root_notes)
+                    m7b5_root_lower = (m6_root_notes and m7b5_root_notes and 
+                                      min(m7b5_root_notes) < min(m6_root_notes))
+                    
+                    sorted_notes = sorted(active_notes)
+                    m7b5_root_first_pos = next((i for i, n in enumerate(sorted_notes) if n % 12 == root_pc), None)
+                    m6_root_first_pos = next((i for i, n in enumerate(sorted_notes) if n % 12 == m6_root_pc), None)
+                    m7b5_root_first = (m7b5_root_first_pos is not None and m6_root_first_pos is not None and 
+                                      m7b5_root_first_pos < m6_root_first_pos)
+                    
+                    # CRITICAL RULE: Apply bonus for m7b5 ONLY if bass is the m7b5 root
+                    # The m7b5 root is the 6th of the equivalent m6
+                    # This matches the m6 rule: if bass = 6th of m6, prefer m7b5
+                    # When checking from m7b5 root, only apply bonus if m7b5 root is in bass
+                    # This ensures: G Bb Db F with G in bass → Gm7b5
+                    #              G Bb Db F with Db in bass → Bbm6 (m6 bonus from Bb evaluation wins)
+                    if m7b5_root_in_bass:
+                        # Perfect m7b5 match - apply bonus to beat m6 (m6 gets ~1640 with bonus)
+                        # Base score for m7b5 is ~1040, need bonus that beats 1640
+                        # Use 5000 to get ~6040, which absolutely beats m6's ~1640 even with penalty
+                        # CRITICAL: Overwrite any previous bonus unconditionally
+                        special_pattern_bonus = 5000.0  # Massive bonus to absolutely beat m6 (1640)
+
             # Calculate final score
             score = (essential_score + percentage_match + highest_note_bonus +
                     completeness_bonus + major_seventh_bonus + rootless_bonus + root_in_bass_bonus +
                     characteristic_bonus + dominant_quality_adjustment + special_pattern_bonus +
                     inversion_bonus - extra_penalty - missing_penalty)
+
+            # DEBUG: Print scores for add9 and 7sus4 chords
+            DEBUG_ADD9_SUS4 = False  # Set to True for debugging
+            if DEBUG_ADD9_SUS4 and (chord_type == 'add9' or chord_type == '7sus4'):
+                root_name = self.get_note_name(root_pc)
+                bass_name = self.get_note_name(lowest_pc) if lowest_pc is not None else '?'
+                print(f"DEBUG SCORE: {chord_type:10} root={root_name:3} bass={bass_name:3} "
+                      f"score={score:8.1f} (essential={essential_score:5.1f} "
+                      f"complete={completeness_bonus:6.1f} special={special_pattern_bonus:6.1f} "
+                      f"extra_pen={extra_penalty:5.1f} missing_pen={missing_penalty:5.1f})")
 
             if DEBUG_PATTERN and chord_type == 'diminished7_no_m3':
                 print(f"      SCORED: score={score:.1f}, best_score={best_score:.1f}")
@@ -2695,21 +2842,21 @@ class ChordDetector:
                 elif chord_type == 'augmented':
                     chord_name = f"{root_name}aug"
                 elif chord_type == 'sus2':
-                    chord_name = f"{root_name}2"
+                    chord_name = f"{root_name}sus2"
                 elif chord_type == 'sus4':
-                    chord_name = f"{root_name}4"
+                    chord_name = f"{root_name}sus4"
                 elif chord_type == '7sus4':
                     chord_name = f"{root_name}7sus4"
                 elif chord_type == '7sus2':
                     chord_name = f"{root_name}7sus2"
                 elif chord_type == '9sus':
-                    chord_name = f"{root_name}9(sus)"
+                    chord_name = f"{root_name}9sus"
                 elif chord_type == '9sus_with5':
-                    chord_name = f"{root_name}9(sus)"
+                    chord_name = f"{root_name}9sus"
                 elif chord_type == '13sus':
-                    chord_name = f"{root_name}13(sus)"
+                    chord_name = f"{root_name}13sus"
                 elif chord_type == '13sus_with5':
-                    chord_name = f"{root_name}13(sus)"
+                    chord_name = f"{root_name}13sus"
                 elif chord_type == '7sus13':
                     chord_name = f"{root_name}7sus13"
                 elif chord_type == 'sus13':
@@ -2741,7 +2888,7 @@ class ChordDetector:
                 elif chord_type == 'diminished_major7':
                     chord_name = f"{root_name}dimΔ7"
                 elif chord_type == 'half_diminished7':
-                    chord_name = f"{root_name}hdim7"
+                    chord_name = f"{root_name}ø7"
                 elif chord_type == 'half_diminished11':
                     chord_name = f"{root_name}hdim7(11)"
                 elif chord_type == 'half_diminished11_no3':
@@ -2765,11 +2912,11 @@ class ChordDetector:
                 elif chord_type == '7#11_no3_no5':
                     chord_name = f"{root_name}7(#11)"
                 elif chord_type == '13#11_no3_no5':
-                    chord_name = f"{root_name}13(#11)"
+                    chord_name = f"{root_name}13#11"
                 elif chord_type == '13#11_no3':
-                    chord_name = f"{root_name}13(#11)"
+                    chord_name = f"{root_name}13#11"
                 elif chord_type == '13#11_no9_no5':
-                    chord_name = f"{root_name}13(#11)"
+                    chord_name = f"{root_name}13#11"
                 elif chord_type == '13#11_no5':
                     chord_name = f"{root_name}13(#11)"
                 elif chord_type == 'major9':
@@ -2785,7 +2932,7 @@ class ChordDetector:
                 elif chord_type == 'major7#11_shell':
                     chord_name = f"{root_name}Δ7(#11)"
                 elif chord_type == 'major9#11':
-                    chord_name = f"{root_name}Δ9(#11)"
+                    chord_name = f"{root_name}Δ9#11"
                 elif chord_type == 'minor11':
                     chord_name = f"{root_name}m11"
                 elif chord_type == 'minor11_no5':
@@ -2803,15 +2950,15 @@ class ChordDetector:
                 elif chord_type == 'altered':
                     chord_name = f"{root_name}7alt"
                 elif chord_type == '7b9' or chord_type == '7b9_no5':
-                    chord_name = f"{root_name}7(b9)"
+                    chord_name = f"{root_name}7b9"
                 elif chord_type == '7#9':
-                    chord_name = f"{root_name}7(#9)"
+                    chord_name = f"{root_name}7#9"
                 elif chord_type == '7#11':
-                    chord_name = f"{root_name}7(#11)"
+                    chord_name = f"{root_name}7#11"
                 elif chord_type == '7#11_shell' or chord_type == '7#11_no3':
                     chord_name = f"{root_name}7(#11)"
                 elif chord_type == '7b13':
-                    chord_name = f"{root_name}7(b13)"
+                    chord_name = f"{root_name}7b13"
                 elif chord_type == '9b13' or chord_type == '9b13_no5':
                     chord_name = f"{root_name}9(b13)"
                 elif chord_type == '13b9' or chord_type == '13b9_no5':
@@ -2827,7 +2974,7 @@ class ChordDetector:
                 elif chord_type == '7b9b13':
                     chord_name = f"{root_name}7(b9,b13)"
                 elif chord_type == '7#9b13':
-                    chord_name = f"{root_name}7(#9,b13)"
+                    chord_name = f"{root_name}7#9b13"
                 elif chord_type == '7#11b13':
                     chord_name = f"{root_name}7(#11,b13)"
                 elif chord_type == '7b9#11b13':
@@ -2842,9 +2989,9 @@ class ChordDetector:
                     chord_name = f"{root_name}7(b9,#9,b13)"
                 # Shell voicings (display same as full voicings)
                 elif chord_type == '7b13_no5':
-                    chord_name = f"{root_name}7(b13)"
+                    chord_name = f"{root_name}7b13"
                 elif chord_type == '7#9b13_no5':
-                    chord_name = f"{root_name}7(#9,b13)"
+                    chord_name = f"{root_name}7#9b13"
                 elif chord_type == '7b9b13_no5':
                     chord_name = f"{root_name}7(b9,b13)"
                 elif chord_type == '7b9#9_no5':
@@ -2866,7 +3013,7 @@ class ChordDetector:
                 elif chord_type == '6_9_no3':
                     chord_name = f"{root_name}6/9"
                 elif chord_type == 'major7_6_9':
-                    chord_name = f"{root_name}maj7(6/9)"
+                    chord_name = f"{root_name}Δ7(6/9)"
                 elif chord_type == 'minor6':
                     chord_name = f"{root_name}m6"
                 elif chord_type == 'minor6_no5':
@@ -2935,8 +3082,13 @@ class ChordDetector:
 
             # Match against scale patterns
             for scale_name, pattern in SCALE_PATTERNS.items():
-                # Skip clustered-only scales if notes are not clustered AND not within one octave
-                if scale_name in clustered_only_scales and not (is_clustered or is_within_octave):
+                # For pentatonic scales, allow detection even if not clustered (they have gaps)
+                # Pentatonic scales have 5 notes with gaps (e.g., C D E G A has gap between E and G)
+                if scale_name in {'Major Pentatonic', 'Minor Pentatonic'}:
+                    # Allow pentatonic detection regardless of clustering
+                    pass
+                # Skip other clustered-only scales if notes are not clustered AND not within one octave
+                elif scale_name in clustered_only_scales and not (is_clustered or is_within_octave):
                     continue
 
                 # For Whole Tone, require at least 6 notes
@@ -2960,7 +3112,7 @@ class ChordDetector:
 
                     # Perfect match (no extra notes) gets HUGE score to beat chord interpretations
                     if extra == 0:
-                        score = 5000 + matched  # Massive boost for perfect scale/mode matches
+                        score = 15000 + matched  # Massive boost for perfect scale/mode matches (increased from 5000)
 
                         # Extra bonuses for important mode categories
                         # Major modes (Ionian through Locrian)
@@ -2973,11 +3125,15 @@ class ChordDetector:
                                                'Phrygian Dominant', 'Lydian #2', 'Altered Diminished'}
 
                         if scale_name in major_modes:
-                            score += 1000  # Huge bonus for perfect major mode match
+                            score += 5000  # Huge bonus for perfect major mode match (increased from 1000)
                         elif scale_name in melodic_minor_modes:
-                            score += 1000  # Huge bonus for perfect melodic minor mode match
+                            score += 5000  # Huge bonus for perfect melodic minor mode match (increased from 1000)
                         elif scale_name in harmonic_minor_modes:
-                            score += 1000  # Huge bonus for perfect harmonic minor mode match
+                            score += 5000  # Huge bonus for perfect harmonic minor mode match (increased from 1000)
+                        
+                        # Extra bonus for pentatonic scales
+                        if 'Pentatonic' in scale_name:
+                            score += 3000  # Additional bonus for pentatonic scales
                     else:
                         # Allow some extra notes but penalize
                         score = matched * 10 - extra * 5
