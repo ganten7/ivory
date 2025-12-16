@@ -1,6 +1,6 @@
 # Ivory - MIDI Keyboard Monitor with Advanced Chord Detection
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/ganten/ivory/releases)
+[![Version](https://img.shields.io/badge/version-1.1-blue.svg)](https://github.com/ganten/ivory/releases)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 **Ivory** is a simple MIDI keyboard monitor and chord detection application with support for 100+ chord patterns, real-time visualization, and intelligent chord recognition.
@@ -21,6 +21,26 @@
 ## Overview
 
 Ivory features an enhanced chord detection algorithm with better accuracy, improved scale detection, and sophisticated handling of edge cases while supporting jazz voicings.
+
+## ✨ What's New in v1.1
+
+### 🎵 Interval Detection
+- **2-note intervals now work!** Play any two notes and see the interval (e.g., "C (P5)", "C (M3)")
+- Previously filtered out by the algorithm - now fully functional
+
+### 🎼 Complete Scale Detection
+- **All Modes of Major** now work correctly (Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian)
+- **Pentatonic Scales** fixed (Major Pentatonic and Minor Pentatonic)
+- **Continuous scales win** - When scales are continuous (all scale degrees present), they are prioritized
+
+### 🎹 Enhanced Chord Detection
+- Extended chords improved (maj9, maj13#11, m9, m13)
+- Slash chord notation improved (Cmaj7/B, Cm7/G, Cm7/Bb)
+- Dominant 13#11 detection improved
+
+### 🪟 Windows Compatibility
+- Fixed `os.fork()` error on Windows
+- App now runs correctly on Windows without AttributeError
 
 ## ✨ What's New in v1.0.1
 
@@ -67,9 +87,9 @@ Ivory features an enhanced chord detection algorithm with better accuracy, impro
 ### Download
 
 Download for your platform:
-- **Windows**: [Ivory-Windows-v1.0.1.exe](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-Windows-v1.0.1.exe)
-- **macOS**: [Ivory-macOS-v1.0.1.zip](https://github.com/ganten/ivory/releases/download/v1.0.1/Ivory-macOS-v1.0.1.zip)
-- **Linux**: [ivory_1.0.1_all.deb](https://github.com/ganten/ivory/releases/download/v1.0.1/ivory_1.0.1_all.deb)
+- **Windows**: [Ivory-Windows-v1.1.exe](https://github.com/ganten/ivory/releases/download/v1.1/Ivory-Windows-v1.1.exe)
+- **macOS**: [Ivory-macOS-v1.1.dmg](https://github.com/ganten/ivory/releases/download/v1.1/Ivory-macOS-v1.1.dmg)
+- **Linux**: [ivory_1.1_all.deb](https://github.com/ganten/ivory/releases/download/v1.1/ivory_1.1_all.deb)
 
 ### Windows
 
@@ -88,8 +108,8 @@ Download for your platform:
 # Remove old version if installed
 sudo dpkg -r ivory
 
-# Install v1.0.1
-sudo dpkg -i ivory_1.0.1_all.deb
+# Install v1.1
+sudo dpkg -i ivory_1.1_all.deb
 
 # Fix dependencies if needed
 sudo apt-get install -f

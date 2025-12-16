@@ -56,10 +56,10 @@
 - **Installation:** Double-click to run (portable, no install needed)
 
 ### macOS
-- **File:** `Ivory-macOS-v1.1.zip`
-- **Size:** ~124 MB
+- **File:** `Ivory-macOS-v1.1.dmg`
+- **Size:** ~28 MB
 - **Installation:**
-  1. Download and extract the .zip file
+  1. Download and open the .dmg file
   2. Drag `Ivory.app` to Applications
   3. Right-click and "Open" first time (macOS security)
 
