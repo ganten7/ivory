@@ -29,18 +29,26 @@ jobs:
             platform: windows
             build_command: |
               echo "Building Windows .exe for version $VERSION"
+              python -m pip install --upgrade pip
               pip install -r build_scripts/requirements.txt
               cd build_scripts
               pyinstaller --clean build_windows.spec
               cd ..
-              mkdir -p dist
+              if [ ! -d "dist" ]; then
+                mkdir -p dist
+              fi
               if [ -f "build_scripts/dist/Ivory/Ivory.exe" ]; then
                 cp build_scripts/dist/Ivory/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
+                echo "Found executable at build_scripts/dist/Ivory/Ivory.exe"
               elif [ -f "build_scripts/dist/Ivory.exe" ]; then
                 cp build_scripts/dist/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
+                echo "Found executable at build_scripts/dist/Ivory.exe"
               else
                 echo "Error: Could not find built executable"
-                ls -la build_scripts/dist/
+                echo "Contents of build_scripts/dist/:"
+                ls -la build_scripts/dist/ || dir build_scripts\dist
+                echo "Contents of build_scripts/dist/Ivory/ (if exists):"
+                ls -la build_scripts/dist/Ivory/ || dir build_scripts\dist\Ivory 2>/dev/null || echo "Directory does not exist"
                 exit 1
               fi
 
@@ -83,6 +91,7 @@ jobs:
 
       - name: Build for ${{ matrix.platform }}
         run: ${{ matrix.build_command }}
+        shell: bash
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
