@@ -144,7 +144,6 @@ jobs:
 
       - name: Build for ${{ matrix.platform }}
         run: ${{ matrix.build_command }}
-        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
