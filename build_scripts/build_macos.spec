@@ -56,8 +56,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'Ivory',
         'CFBundleDisplayName': 'Ivory',
-        'CFBundleVersion': '1.0.0',
-        'CFBundleShortVersionString': '1.0.0',
+        'CFBundleVersion': '1.1',
+        'CFBundleShortVersionString': '1.1',
         'NSHighResolutionCapable': 'True',
         'CFBundlePackageType': 'APPL',
         'LSMinimumSystemVersion': '10.12',
