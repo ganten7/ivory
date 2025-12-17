@@ -17,6 +17,7 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
+            shell: bash
             build_command: |
               mkdir -p dist
               mkdir -p build-deb/DEBIAN
@@ -75,6 +76,7 @@ jobs:
 
           - os: windows-latest
             platform: windows
+            shell: pwsh
             build_command: |
               pip install -r build_scripts/requirements.txt
               cd build_scripts
@@ -100,6 +102,7 @@ jobs:
 
           - os: macos-latest
             platform: macos
+            shell: bash
             build_command: |
               pip install -r build_scripts/requirements.txt
               cd build_scripts
@@ -144,7 +147,7 @@ jobs:
 
       - name: Build for ${{ matrix.platform }}
         run: ${{ matrix.build_command }}
-        shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
+        shell: ${{ matrix.shell }}
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
