@@ -2160,6 +2160,23 @@ def main():
             print("  No MIDI input ports found!")
         return
 
+    # Fork the process to detach from terminal (Linux only - not macOS or Windows)
+    # This allows closing the terminal without killing Ivory on Linux
+    # macOS app bundles handle this automatically, and Windows doesn't support fork()
+    #
+    # IMPORTANT: Do NOT fork on macOS - app bundles expect a specific process structure
+    # Forking breaks macOS app bundle launch and causes "quit unexpectedly" errors
+    #
+    if hasattr(os, 'fork') and sys.platform != 'darwin':  # Linux only, skip macOS
+        if os.fork() > 0:
+            # Parent process - exit immediately
+            sys.exit(0)
+        # Child process continues
+        # Redirect stdout/stderr to /dev/null (Unix only)
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
+    # macOS and Windows: Don't fork - let the OS handle process management
+    
     # Create application (removed single-instance check - it was causing issues)
     app = QApplication(sys.argv)
     app.setApplicationName("Ivory")
