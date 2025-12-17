@@ -18,135 +18,82 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             build_command: |
-              set -e  # Exit on error
-              echo "Building Linux .deb for version $VERSION"
-              
-              # Install dpkg-deb if needed
-              echo "Installing dependencies..."
-              sudo apt-get update && sudo apt-get install -y dpkg-dev || {
-                echo "ERROR: Failed to install dpkg-dev"
-                exit 1
-              }
-              
-              # Verify source files exist
-              echo "Checking source files..."
-              if [ ! -f "ivory_v2.py" ]; then
-                echo "ERROR: ivory_v2.py not found"
-                ls -la *.py | head -10
-                exit 1
-              fi
-              if [ ! -f "chord_detector_v2.py" ]; then
-                echo "ERROR: chord_detector_v2.py not found"
-                ls -la *.py | head -10
-                exit 1
-              fi
-              echo "✓ Source files found"
-              
-              # Check if build script exists
-              if [ ! -f "build-release-v1.1.sh" ]; then
-                echo "ERROR: build-release-v1.1.sh not found"
-                ls -la *.sh | head -10
-                exit 1
-              fi
-              
-              # Make script executable
-              chmod +x build-release-v1.1.sh
-              
-              # Run build script with error handling
-              echo "Running build script..."
-              VERSION=$VERSION bash build-release-v1.1.sh || {
-                echo "Build script failed with exit code $?"
-                echo "Checking for partial build artifacts..."
-                ls -la release-artifacts/ivory-linux/ 2>/dev/null || echo "No artifacts found"
-                echo "Checking build directory..."
-                ls -la build-release-v1.1/ 2>/dev/null || echo "Build directory not found"
-                exit 1
-              }
-              
-              # Verify .deb was created
-              if [ ! -f "release-artifacts/ivory-linux/ivory_${VERSION}_all.deb" ]; then
-                echo "ERROR: .deb file not found after build"
-                echo "Expected: release-artifacts/ivory-linux/ivory_${VERSION}_all.deb"
-                echo "Contents of release-artifacts/ivory-linux/:"
-                ls -la release-artifacts/ivory-linux/ 2>/dev/null || echo "Directory does not exist"
-                echo "Contents of release-artifacts/:"
-                ls -la release-artifacts/ 2>/dev/null || echo "Directory does not exist"
-                exit 1
-              fi
-              
-              echo "✓ .deb file found: release-artifacts/ivory-linux/ivory_${VERSION}_all.deb"
               mkdir -p dist
-              cp release-artifacts/ivory-linux/ivory_${VERSION}_all.deb dist/
-              echo "✓ Linux .deb copied to dist/"
+              mkdir -p build-deb/DEBIAN
+              mkdir -p build-deb/usr/bin
+              mkdir -p build-deb/usr/share/applications
+              mkdir -p build-deb/usr/share/icons/hicolor/128x128/apps
+              mkdir -p build-deb/usr/share/doc/ivory
+              
+              # Copy files
+              cp ivory_v2.py build-deb/usr/bin/ivory
+              cp chord_detector_v2.py build-deb/usr/bin/
+              chmod +x build-deb/usr/bin/ivory
+              
+              # Copy icon if it exists
+              if [ -d "icons" ] && [ -f "icons/ivory.png" ]; then
+                cp icons/ivory.png build-deb/usr/share/icons/hicolor/128x128/apps/
+              fi
+              
+              # Create desktop file
+              cat > build-deb/usr/share/applications/ivory.desktop << EOF
+              [Desktop Entry]
+              Version=${VERSION}
+              Name=Ivory
+              GenericName=MIDI Keyboard Monitor
+              Comment=Simple MIDI Keyboard Monitor with Advanced Chord Detection
+              Exec=ivory
+              Icon=ivory
+              Terminal=false
+              Type=Application
+              StartupWMClass=Ivory
+              StartupNotify=true
+              Categories=AudioVideo;Audio;MIDI;Music;
+              Keywords=midi;keyboard;piano;music;chord;detection;ivory;monitor;88-key;visualizer;
+              X-GNOME-UsesNotifications=false
+              EOF
+              
+              # Create control file
+              cat > build-deb/DEBIAN/control << EOF
+              Package: ivory
+              Version: ${VERSION}
+              Section: sound
+              Priority: optional
+              Architecture: all
+              Depends: python3 (>= 3.6), python3-pyqt5, python3-pyqt5.qtsvg
+              Maintainer: Ganten <ganten7@github.com>
+              Description: Simple MIDI Keyboard Monitor with Advanced Chord Detection
+               Ivory provides real-time visualization of all 88 piano keys with intelligent
+               chord recognition supporting triads, 7th chords, extensions, alterations,
+               inversions, and slash chords.
+              Homepage: https://github.com/ganten7/ivory
+              EOF
+              
+              # Build package
+              dpkg-deb --build build-deb ivory_${VERSION}_all.deb
+              mv ivory_${VERSION}_all.deb dist/
 
           - os: windows-latest
             platform: windows
             build_command: |
-              echo "Building Windows .exe for version $VERSION"
-              python -m pip install --upgrade pip
               pip install -r build_scripts/requirements.txt
-              
-              # Verify source files exist
-              echo "Checking source files..."
-              ls -la ivory_v2.py || echo "WARNING: ivory_v2.py not found"
-              ls -la chord_detector_v2.py || echo "WARNING: chord_detector_v2.py not found"
-              ls -la icons/ || echo "WARNING: icons directory not found"
-              
-              # Build with better error handling
               cd build_scripts
-              echo "Running PyInstaller from build_scripts directory..."
-              pyinstaller --clean build_windows.spec || {
-                echo "PyInstaller failed!"
-                echo "Checking for error logs..."
-                if [ -f "build/build_windows/warn-build_windows.txt" ]; then
-                  echo "=== Warnings ==="
-                  cat build/build_windows/warn-build_windows.txt
-                fi
-                exit 1
-              }
+              pyinstaller build_windows.spec
               cd ..
-              
-              # Create dist directory if needed
-              if [ ! -d "dist" ]; then
-                mkdir -p dist
-              fi
-              
-              # Check for executable (onefile mode creates dist/Ivory.exe directly)
-              if [ -f "build_scripts/dist/Ivory.exe" ]; then
-                cp build_scripts/dist/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
-                echo "✓ Found executable at build_scripts/dist/Ivory.exe"
-              elif [ -f "build_scripts/dist/Ivory/Ivory.exe" ]; then
-                cp build_scripts/dist/Ivory/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
-                echo "✓ Found executable at build_scripts/dist/Ivory/Ivory.exe"
-              else
-                echo "ERROR: Could not find built executable"
-                echo "Contents of build_scripts/dist/:"
-                ls -la build_scripts/dist/ || dir build_scripts\dist
-                echo "Contents of build_scripts/dist/Ivory/ (if exists):"
-                ls -la build_scripts/dist/Ivory/ || dir build_scripts\dist\Ivory 2>/dev/null || echo "Directory does not exist"
-                echo "PyInstaller build directory contents:"
-                ls -la build_scripts/build/ || echo "Build directory not found"
-                exit 1
-              fi
+              mkdir -p dist
+              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
 
           - os: macos-latest
             platform: macos
             build_command: |
-              echo "Building macOS .zip for version $VERSION"
               pip install -r build_scripts/requirements.txt
               cd build_scripts
-              pyinstaller --clean build_macos.spec
+              pyinstaller build_macos.spec
               cd ..
               mkdir -p dist
-              if [ -d "build_scripts/dist/Ivory.app" ]; then
-                cd build_scripts/dist
-                zip -r ../../dist/Ivory-macOS-v${VERSION}.zip Ivory.app
-                cd ../..
-              else
-                echo "Error: Could not find Ivory.app"
-                ls -la build_scripts/dist/
-                exit 1
-              fi
+              cd build_scripts/dist
+              zip -r ../../dist/Ivory-macOS-v${VERSION}.zip Ivory.app
+              cd ../..
 
     steps:
       - name: Checkout code
