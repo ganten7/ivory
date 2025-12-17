@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
 
@@ -9,17 +10,30 @@ a = Analysis(
     binaries=[],
     datas=[
         ('../chord_detector_v2.py', '.'),
+        ('../icons', 'icons'),  # Include icons directory for resource_path()
         ('../screenshots', 'screenshots'),
     ],
     hiddenimports=[
+        'chord_detector_v2',  # Explicit import for chord detector module
         'mido',
         'mido.backends.rtmidi',
         'rtmidi',
-    ],
+        # PyQt5 modules - explicit imports for better compatibility
+        'PyQt5.QtCore',
+        'PyQt5.QtGui',
+        'PyQt5.QtWidgets',
+        'PyQt5.sip',
+    ] + collect_submodules('mido') + collect_submodules('rtmidi'),  # Collect all mido/rtmidi submodules
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'tkinter',
+        'matplotlib',
+        'numpy',
+        'scipy',
+        'pandas',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -39,14 +53,14 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # CRITICAL FIX: Disable UPX compression to prevent PKG archive corruption
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=False,  # Windowed mode (no console)
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='../screenshots/icon.ico',
+    icon='../screenshots/icon.ico' if os.path.exists('../screenshots/icon.ico') else None,
 )

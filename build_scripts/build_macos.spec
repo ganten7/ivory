@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
 
@@ -9,17 +10,41 @@ a = Analysis(
     binaries=[],
     datas=[
         ('../chord_detector_v2.py', '.'),
+        ('../icons', 'icons'),  # Include icons directory for resource_path()
         ('../screenshots', 'screenshots'),
     ],
     hiddenimports=[
+        'chord_detector_v2',  # Explicit import for chord detector module
         'mido',
         'mido.backends.rtmidi',
         'rtmidi',
-    ],
+        # PyQt5 modules - explicit imports for better compatibility
+        'PyQt5.QtCore',
+        'PyQt5.QtGui',
+        'PyQt5.QtWidgets',
+        'PyQt5.sip',
+    ] + collect_submodules('mido') + collect_submodules('rtmidi'),  # Collect all mido/rtmidi submodules
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'tkinter',
+        'matplotlib',
+        'numpy',
+        'scipy',
+        'pandas',
+        'PyQt5.QtBluetooth',
+        'PyQt5.QtNfc',
+        'PyQt5.QtWebSockets',
+        'PyQt5.QtWebEngine',
+        'PyQt5.QtWebEngineWidgets',
+        'PyQt5.QtQuick',
+        'PyQt5.QtQml',
+        'PyQt5.Qt3D',
+        'PyQt5.QtGamepad',
+        'PyQt5.QtLocation',
+        'PyQt5.QtPositioning',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -37,7 +62,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # CRITICAL FIX: Disable UPX compression to prevent PKG archive corruption
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -52,7 +77,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,  # CRITICAL FIX: Disable UPX compression in COLLECT as well
     upx_exclude=[],
     name='Ivory',
 )
@@ -65,8 +90,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'Ivory',
         'CFBundleDisplayName': 'Ivory',
-        'CFBundleVersion': '1.0.13',
-        'CFBundleShortVersionString': '1.0.13',
+        'CFBundleVersion': '1.0.1',
+        'CFBundleShortVersionString': '1.0.1',
         'NSHighResolutionCapable': 'True',
     },
 )

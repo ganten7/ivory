@@ -1,0 +1,405 @@
+================================================================================
+IVORY - WINDOWS AND MAC FIXES DOCUMENTATION
+================================================================================
+
+This document summarizes the exact fixes applied to make Ivory work on Windows
+and macOS. These fixes address compilation failures and runtime launch errors.
+
+================================================================================
+ERRORS FIXED
+================================================================================
+
+1. WINDOWS ERROR: PyInstaller PKG Archive Loading Failure
+   ------------------------------------------------------
+   Error Message: "Could not load PyInstaller's embedded PKG archive from the 
+                  executable (C:\Users\Pedro\Downloads\ivory.exe)"
+   
+   Root Cause: UPX compression was corrupting the embedded PKG archive in the
+               PyInstaller onefile executable.
+
+2. WINDOWS ERROR: ModuleNotFoundError for mido.backends.rtmidi
+   ------------------------------------------------------------
+   Error Message: "No module named 'mido.backends.rtmidi'"
+   
+   Traceback showed failure in:
+   - ivory.py, line 861, in connect_midi
+   - mido\backends\backend.py, line 174, in get_input_names
+   - mido\backends\backend.py, line 63, in load
+   
+   Root Cause: PyInstaller was not including the mido.backends.rtmidi module
+               and its dependencies in the bundled executable.
+
+3. MACOS ERROR: ModuleNotFoundError for mido.backends.rtmidi
+   ----------------------------------------------------------
+   Error Message: "No module named 'mido.backends.rtmidi'"
+   
+   Traceback showed failure in:
+   - ivory.py, line 879, in connect_midi
+   - mido/backends/backend.py, line 174, in get_input_names
+   - mido/backends/backend.py, line 63, in load
+   
+   Root Cause: PyInstaller was not including the mido.backends.rtmidi module
+               and its dependencies in the bundled .app bundle.
+
+================================================================================
+FIXES IMPLEMENTED
+================================================================================
+
+LOCATION: .github/workflows/release.yml
+
+================================================================================
+FIX #1: Windows PyInstaller Configuration
+================================================================================
+
+FILE: .github/workflows/release.yml
+LINES: 107-131
+
+CHANGES MADE:
+-------------
+
+1. Added --noupx flag to prevent UPX compression
+   This fixes the PKG archive loading error by preventing UPX from corrupting
+   the embedded archive.
+
+2. Added explicit hidden imports for mido and rtmidi:
+   --hidden-import mido
+   --hidden-import mido.backends.rtmidi
+   --hidden-import rtmidi
+
+3. Added collect-all commands to ensure all submodules are included:
+   --collect-all mido
+   --collect-all rtmidi
+
+COMPLETE WINDOWS BUILD COMMAND:
+--------------------------------
+python -m PyInstaller --onefile --windowed --name ivory `
+  --clean `
+  --noupx `                                    # FIX #1: Prevents PKG archive corruption
+  --noconfirm `
+  --hidden-import chord_detector `
+  --collect-submodules chord_detector `
+  --hidden-import PyQt5.QtCore `
+  --hidden-import PyQt5.QtGui `
+  --hidden-import PyQt5.QtWidgets `
+  --hidden-import PyQt5.QtWidgets.QApplication `
+  --hidden-import PyQt5.sip `
+  --hidden-import mido `                       # FIX #2: Explicit mido import
+  --hidden-import mido.backends.rtmidi `      # FIX #2: Explicit rtmidi backend import
+  --hidden-import rtmidi `                    # FIX #2: Explicit rtmidi import
+  --collect-all mido `                         # FIX #2: Collect all mido submodules
+  --collect-all rtmidi `                       # FIX #2: Collect all rtmidi submodules
+  --exclude-module tkinter `
+  --exclude-module matplotlib `
+  --exclude-module numpy `
+  --exclude-module scipy `
+  --exclude-module pandas `
+  ivory.py
+
+KEY FIXES EXPLAINED:
+--------------------
+1. --noupx: UPX compression can corrupt PyInstaller's embedded PKG archive.
+            Disabling it ensures the archive loads correctly.
+
+2. --hidden-import mido.backends.rtmidi: PyInstaller doesn't auto-detect
+   this backend module because it's dynamically loaded by mido. Explicitly
+   telling PyInstaller to include it ensures it's bundled.
+
+3. --collect-all mido and --collect-all rtmidi: These commands recursively
+   collect all submodules and data files from these packages, ensuring
+   complete inclusion of all dependencies.
+
+================================================================================
+FIX #2: macOS PyInstaller Configuration
+================================================================================
+
+FILE: .github/workflows/release.yml
+LINES: 175-220
+
+CHANGES MADE:
+-------------
+
+1. Used --onedir instead of --onefile for macOS
+   This creates a directory-based bundle which is more reliable on macOS
+   and avoids some PyInstaller issues with onefile bundles.
+
+2. Added explicit hidden imports for mido and rtmidi (same as Windows):
+   --hidden-import mido
+   --hidden-import mido.backends.rtmidi
+   --hidden-import rtmidi
+
+3. Added collect-all commands:
+   --collect-all mido
+   --collect-all rtmidi
+
+4. Added --add-data for icons directory:
+   --add-data "icons:icons"
+
+COMPLETE MACOS BUILD COMMAND:
+------------------------------
+python -m PyInstaller --onedir --windowed --name Ivory \
+  --additional-hooks-dir=hooks \
+  --add-data "icons:icons" \
+  --hidden-import chord_detector \
+  --hidden-import PyQt5.QtCore \
+  --hidden-import PyQt5.QtGui \
+  --hidden-import PyQt5.QtWidgets \
+  --hidden-import PyQt5.sip \
+  --hidden-import mido \                       # FIX #2: Explicit mido import
+  --hidden-import mido.backends.rtmidi \      # FIX #2: Explicit rtmidi backend import
+  --hidden-import rtmidi \                   # FIX #2: Explicit rtmidi import
+  --collect-all mido \                         # FIX #2: Collect all mido submodules
+  --collect-all rtmidi \                       # FIX #2: Collect all rtmidi submodules
+  --exclude-module tkinter \
+  --exclude-module matplotlib \
+  --exclude-module numpy \
+  --exclude-module scipy \
+  --exclude-module pandas \
+  --exclude-module PyQt5.QtBluetooth \
+  --exclude-module PyQt5.QtNfc \
+  --exclude-module PyQt5.QtWebSockets \
+  --exclude-module PyQt5.QtWebEngine \
+  --exclude-module PyQt5.QtWebEngineWidgets \
+  --exclude-module PyQt5.QtQuick \
+  --exclude-module PyQt5.QtQml \
+  --exclude-module PyQt5.Qt3D \
+  --exclude-module PyQt5.QtGamepad \
+  --exclude-module PyQt5.QtLocation \
+  --exclude-module PyQt5.QtPositioning \
+  --noconfirm \
+  ivory.py
+
+KEY FIXES EXPLAINED:
+--------------------
+1. --onedir: Creates a directory-based bundle (.app) instead of a single
+   file executable. This is more reliable on macOS and avoids some
+   PyInstaller issues.
+
+2. --hidden-import mido.backends.rtmidi: Same as Windows - ensures the
+   rtmidi backend is explicitly included.
+
+3. --collect-all mido and --collect-all rtmidi: Ensures all dependencies
+   are recursively collected.
+
+================================================================================
+CODE CHANGES IN ivory.py
+================================================================================
+
+FILE: ivory.py
+LINES: 17-25
+
+RESOURCE PATH HANDLING:
+-----------------------
+The code already had proper PyInstaller support for resource paths:
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(os.path.dirname(__file__))
+    return os.path.join(base_path, relative_path)
+
+This function handles both development mode and PyInstaller bundle mode,
+allowing resources (like icons) to be found correctly in both scenarios.
+
+USAGE IN CODE:
+--------------
+Lines 1732-1744 show how the resource_path function is used:
+
+try:
+    if getattr(sys, 'frozen', False):
+        # PyInstaller bundle
+        icon_path = resource_path("icons/ivory.png")
+    else:
+        # Development
+        icon_path = Path(__file__).parent / "icons" / "ivory.png"
+except:
+    icon_path = None
+
+if icon_path and os.path.exists(icon_path):
+    app.setWindowIcon(QIcon(str(icon_path)))
+
+================================================================================
+MIDO IMPORT HANDLING
+================================================================================
+
+FILE: ivory.py
+LINES: 50-65
+
+The code uses lazy importing for mido to avoid import errors at startup:
+
+def check_dependencies():
+    """Check if required dependencies are available"""
+    try:
+        import mido
+        from mido import Message
+    except ImportError:
+        print("Error: mido library not found. Install it with:")
+        print("  pip install mido python-rtmidi")
+        sys.exit(1)
+    
+    return mido, Message
+
+This function is called when MIDI functionality is actually needed (e.g., in
+connect_midi at line 876), not at module import time. This allows the app
+to start even if mido isn't available, though it will fail when trying to
+connect to MIDI.
+
+However, for PyInstaller bundles, we need to ensure mido.backends.rtmidi
+is included even though it's dynamically loaded. That's why the explicit
+--hidden-import flags are necessary.
+
+================================================================================
+SUMMARY OF ALL FIXES
+================================================================================
+
+WINDOWS FIXES:
+--------------
+1. Added --noupx flag to prevent UPX compression corruption
+2. Added --hidden-import mido
+3. Added --hidden-import mido.backends.rtmidi
+4. Added --hidden-import rtmidi
+5. Added --collect-all mido
+6. Added --collect-all rtmidi
+
+MACOS FIXES:
+------------
+1. Used --onedir instead of --onefile (better macOS compatibility)
+2. Added --hidden-import mido
+3. Added --hidden-import mido.backends.rtmidi
+4. Added --hidden-import rtmidi
+5. Added --collect-all mido
+6. Added --collect-all rtmidi
+7. Added --add-data "icons:icons" for icon resources
+
+================================================================================
+WHY THESE FIXES WORK
+================================================================================
+
+1. --noupx (Windows):
+   UPX compression can corrupt PyInstaller's embedded PKG archive, making
+   it unreadable at runtime. Disabling UPX ensures the archive remains
+   intact and can be loaded correctly.
+
+2. --hidden-import mido.backends.rtmidi:
+   The mido library dynamically loads backends at runtime. PyInstaller's
+   static analysis doesn't detect these dynamic imports, so we must
+   explicitly tell it to include them.
+
+3. --collect-all mido and --collect-all rtmidi:
+   These packages have submodules and data files that aren't automatically
+   detected. --collect-all recursively includes everything, ensuring
+   complete functionality.
+
+4. --onedir for macOS:
+   Directory-based bundles are more reliable on macOS, especially for
+   applications with many dependencies. The .app bundle structure is also
+   more native to macOS.
+
+================================================================================
+TESTING THE FIXES
+================================================================================
+
+To verify the fixes work:
+
+WINDOWS:
+--------
+1. Build with the fixed PyInstaller command
+2. Test that ivory.exe launches without PKG archive errors
+3. Test that MIDI connection works (no mido.backends.rtmidi errors)
+4. Verify the executable runs on a clean Windows system
+
+MACOS:
+------
+1. Build with the fixed PyInstaller command
+2. Test that Ivory.app launches without errors
+3. Test that MIDI connection works (no mido.backends.rtmidi errors)
+4. Verify the .app bundle runs on a clean macOS system
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+1. .github/workflows/release.yml
+   - Windows build: Added --noupx and mido/rtmidi hidden imports
+   - macOS build: Added mido/rtmidi hidden imports, used --onedir
+
+2. ivory.py
+   - Already had proper PyInstaller resource path handling (no changes needed)
+
+================================================================================
+WINDOWS BUILD SPEC FILE FIXES (build_windows.spec)
+================================================================================
+
+LOCATION: build_scripts/build_windows.spec
+
+CRITICAL FIXES APPLIED:
+-----------------------
+
+1. DISABLED UPX COMPRESSION (Line 42)
+   Changed: upx=True → upx=False
+   
+   WHY: UPX compression corrupts PyInstaller's embedded PKG archive, causing
+        the "Could not load PyInstaller's embedded PKG archive" error at runtime.
+        This is the PRIMARY cause of Windows EXE crashes.
+
+2. ADDED collect_submodules FOR MIDO/RTMIDI
+   Added: from PyInstaller.utils.hooks import collect_submodules
+   Added: + collect_submodules('mido') + collect_submodules('rtmidi')
+   
+   WHY: Ensures all submodules of mido and rtmidi are included, preventing
+        ModuleNotFoundError for mido.backends.rtmidi.
+
+3. ADDED ICONS DIRECTORY TO datas
+   Added: ('../icons', 'icons')
+   
+   WHY: The code uses resource_path("icons/ivory.png") which requires the icons
+        directory to be included in the bundle.
+
+4. ADDED chord_detector_v2 AS HIDDEN IMPORT
+   Added: 'chord_detector_v2' to hiddenimports
+   
+   WHY: Ensures the chord detector module is properly imported, not just included
+        as data.
+
+5. ADDED EXPLICIT PyQt5 HIDDEN IMPORTS
+   Added: 'PyQt5.QtCore', 'PyQt5.QtGui', 'PyQt5.QtWidgets', 'PyQt5.sip'
+   
+   WHY: Explicit imports ensure all PyQt5 components are included, preventing
+        runtime import errors.
+
+6. ADDED EXCLUDES FOR UNNECESSARY MODULES
+   Added: excludes=['tkinter', 'matplotlib', 'numpy', 'scipy', 'pandas']
+   
+   WHY: Reduces bundle size and prevents conflicts with unnecessary modules.
+
+COMPLETE FIXED SPEC FILE STRUCTURE:
+-----------------------------------
+- UPX compression: DISABLED (upx=False)
+- Hidden imports: mido, mido.backends.rtmidi, rtmidi, chord_detector_v2, PyQt5 modules
+- Submodules: collect_submodules('mido'), collect_submodules('rtmidi')
+- Data files: chord_detector_v2.py, icons directory, screenshots
+- Console: False (windowed mode)
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
