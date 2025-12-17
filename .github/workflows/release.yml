@@ -144,11 +144,33 @@ jobs:
       - name: Move artifacts to dist
         run: |
           mkdir -p dist
+          echo "Searching for artifacts..."
           find artifacts -type f \( -name "*.deb" -o -name "*.exe" -o -name "*.zip" \) -exec mv {} dist/ \;
+          echo "Contents of dist/ after moving artifacts:"
+          ls -la dist/ || echo "dist/ directory is empty or doesn't exist"
+          echo "Contents of artifacts/ directory:"
+          find artifacts -type f || echo "No files found in artifacts/"
 
       - name: Get version from tag
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Verify artifacts exist
+        run: |
+          echo "Verifying artifacts before release..."
+          if [ ! -d "dist" ]; then
+            echo "ERROR: dist/ directory does not exist"
+            exit 1
+          fi
+          ARTIFACT_COUNT=$(find dist -type f | wc -l)
+          if [ "$ARTIFACT_COUNT" -eq 0 ]; then
+            echo "ERROR: No artifacts found in dist/"
+            echo "Contents:"
+            ls -la dist/ || echo "dist/ is empty"
+            exit 1
+          fi
+          echo "Found $ARTIFACT_COUNT artifact(s):"
+          find dist -type f -exec ls -lh {} \;
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -158,7 +180,9 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            dist/*
+            dist/*.deb
+            dist/*.exe
+            dist/*.zip
             screenshots/*.png
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
