@@ -268,9 +268,22 @@ echo "=========================================="
 echo ""
 echo "Built packages for Ivory v${VERSION}:"
 echo ""
-ls -lh "${RELEASE_DIR}/ivory-linux/"*.deb 2>/dev/null | awk '{print "  Linux:   " $9 " (" $5 ")"}' || echo "  Linux:   (not built)"
-ls -lh "${RELEASE_DIR}/ivory-windows/"*.exe 2>/dev/null | awk '{print "  Windows: " $9 " (" $5 ")"}' || echo "  Windows: (not built)"
-ls -lh "${RELEASE_DIR}/ivory-macos/"*.zip 2>/dev/null | awk '{print "  macOS:   " $9 " (" $5 ")"}' || echo "  macOS:   (not built)"
+# Use find instead of ls with globs to avoid quote issues
+if find "${RELEASE_DIR}/ivory-linux" -name "*.deb" -type f 2>/dev/null | head -1 | read deb_file; then
+    ls -lh "$deb_file" | awk '{print "  Linux:   " $9 " (" $5 ")"}'
+else
+    echo "  Linux:   (not built)"
+fi
+if find "${RELEASE_DIR}/ivory-windows" -name "*.exe" -type f 2>/dev/null | head -1 | read exe_file; then
+    ls -lh "$exe_file" | awk '{print "  Windows: " $9 " (" $5 ")"}'
+else
+    echo "  Windows: (not built)"
+fi
+if find "${RELEASE_DIR}/ivory-macos" -name "*.zip" -type f 2>/dev/null | head -1 | read zip_file; then
+    ls -lh "$zip_file" | awk '{print "  macOS:   " $9 " (" $5 ")"}'
+else
+    echo "  macOS:   (not built)"
+fi
 echo ""
 echo "All artifacts are in: ${RELEASE_DIR}/"
 echo ""
