@@ -4,6 +4,23 @@ from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
 
+# Explicitly collect PyQt5 plugins directory (required for macOS cocoa plugin)
+pyqt5_plugins_datas = []
+try:
+    import PyQt5
+    pyqt5_path = os.path.dirname(PyQt5.__file__)
+    # Try Qt5/plugins path first
+    plugins_path = os.path.join(pyqt5_path, 'Qt5', 'plugins')
+    if os.path.exists(plugins_path):
+        pyqt5_plugins_datas = collect_data_files('PyQt5', subdir='Qt5/plugins')
+    else:
+        # Try Qt/plugins path
+        plugins_path = os.path.join(pyqt5_path, 'Qt', 'plugins')
+        if os.path.exists(plugins_path):
+            pyqt5_plugins_datas = collect_data_files('PyQt5', subdir='Qt/plugins')
+except Exception as e:
+    print(f"Warning: Could not collect PyQt5 plugins: {e}", file=sys.stderr)
+
 a = Analysis(
     ['../ivory_v2.py'],
     pathex=[],
@@ -11,7 +28,7 @@ a = Analysis(
     datas=[
         ('../chord_detector_v2.py', '.'),
         ('../screenshots', 'screenshots'),
-    ] + ([('../icons', 'icons')] if os.path.exists('../icons') else []),  # Include icons directory if it exists
+    ] + ([('../icons', 'icons')] if os.path.exists('../icons') else []) + pyqt5_plugins_datas,  # Include icons directory if it exists, and PyQt5 plugins
     hiddenimports=[
         'chord_detector_v2',  # Explicit import for chord detector module
         'mido',
@@ -24,11 +41,7 @@ a = Analysis(
         'PyQt5.sip',
     ] + collect_submodules('mido') + collect_submodules('rtmidi'),  # Collect all mido/rtmidi submodules
     hookspath=[],
-    hooksconfig={
-        'PyQt5': {
-            'collect_all': True,  # Collect all PyQt5 data files including plugins
-        },
-    },
+    hooksconfig={},
     runtime_hooks=[],
     excludes=[
         'tkinter',
