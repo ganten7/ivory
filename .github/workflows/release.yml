@@ -76,7 +76,6 @@ jobs:
           - os: windows-latest
             platform: windows
             build_command: |
-              pip install -r build_scripts/requirements.txt
               cd build_scripts
               pyinstaller build_windows.spec
               if ($LASTEXITCODE -ne 0) {
@@ -101,7 +100,6 @@ jobs:
           - os: macos-latest
             platform: macos
             build_command: |
-              pip install -r build_scripts/requirements.txt
               cd build_scripts
               pyinstaller build_macos.spec || {
                 echo "PyInstaller failed!"
