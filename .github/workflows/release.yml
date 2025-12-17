@@ -31,24 +31,47 @@ jobs:
               echo "Building Windows .exe for version $VERSION"
               python -m pip install --upgrade pip
               pip install -r build_scripts/requirements.txt
+              
+              # Verify source files exist
+              echo "Checking source files..."
+              ls -la ivory_v2.py || echo "WARNING: ivory_v2.py not found"
+              ls -la chord_detector_v2.py || echo "WARNING: chord_detector_v2.py not found"
+              ls -la icons/ || echo "WARNING: icons directory not found"
+              
+              # Build with better error handling
               cd build_scripts
-              pyinstaller --clean build_windows.spec
+              echo "Running PyInstaller from build_scripts directory..."
+              pyinstaller --clean build_windows.spec || {
+                echo "PyInstaller failed!"
+                echo "Checking for error logs..."
+                if [ -f "build/build_windows/warn-build_windows.txt" ]; then
+                  echo "=== Warnings ==="
+                  cat build/build_windows/warn-build_windows.txt
+                fi
+                exit 1
+              }
               cd ..
+              
+              # Create dist directory if needed
               if [ ! -d "dist" ]; then
                 mkdir -p dist
               fi
-              if [ -f "build_scripts/dist/Ivory/Ivory.exe" ]; then
-                cp build_scripts/dist/Ivory/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
-                echo "Found executable at build_scripts/dist/Ivory/Ivory.exe"
-              elif [ -f "build_scripts/dist/Ivory.exe" ]; then
+              
+              # Check for executable (onefile mode creates dist/Ivory.exe directly)
+              if [ -f "build_scripts/dist/Ivory.exe" ]; then
                 cp build_scripts/dist/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
-                echo "Found executable at build_scripts/dist/Ivory.exe"
+                echo "✓ Found executable at build_scripts/dist/Ivory.exe"
+              elif [ -f "build_scripts/dist/Ivory/Ivory.exe" ]; then
+                cp build_scripts/dist/Ivory/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
+                echo "✓ Found executable at build_scripts/dist/Ivory/Ivory.exe"
               else
-                echo "Error: Could not find built executable"
+                echo "ERROR: Could not find built executable"
                 echo "Contents of build_scripts/dist/:"
                 ls -la build_scripts/dist/ || dir build_scripts\dist
                 echo "Contents of build_scripts/dist/Ivory/ (if exists):"
                 ls -la build_scripts/dist/Ivory/ || dir build_scripts\dist\Ivory 2>/dev/null || echo "Directory does not exist"
+                echo "PyInstaller build directory contents:"
+                ls -la build_scripts/build/ || echo "Build directory not found"
                 exit 1
               fi
 
