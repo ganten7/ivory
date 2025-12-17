@@ -2247,17 +2247,28 @@ if __name__ == '__main__':
     except Exception as e:
         # Show error dialog if possible, otherwise print to stderr
         import traceback
-        error_msg = f"Ivory encountered an error:\n\n{str(e)}\n\n{traceback.format_exc()}"
+        tb_str = traceback.format_exc()
+        error_msg = f"Ivory encountered an error:\n\n{str(e)}\n\n{tb_str}"
+        
+        # Write crash log to desktop
+        crash_log_path = write_crash_log(str(e), tb_str)
+        
         try:
             # Try to show error dialog (only if PyQt5 is available)
             if PYQT5_AVAILABLE:
                 from PyQt5.QtWidgets import QApplication, QMessageBox
                 if not QApplication.instance():
                     error_app = QApplication(sys.argv)
-                QMessageBox.critical(None, "Ivory Error", error_msg)
+                dialog_msg = f"Ivory encountered an error:\n\n{str(e)}\n\n"
+                if crash_log_path:
+                    dialog_msg += f"Crash log saved to:\n{crash_log_path}"
+                QMessageBox.critical(None, "Ivory Error", dialog_msg)
             else:
                 print(error_msg, file=sys.stderr)
         except:
             # Fallback to stderr
             print(error_msg, file=sys.stderr)
+        
+        if crash_log_path:
+            print(f"\nCrash log saved to: {crash_log_path}", file=sys.stderr)
         sys.exit(1)
