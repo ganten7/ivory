@@ -734,8 +734,12 @@ class MIDIMonitor(QMainWindow):
         
         try:
             self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.update_gui)
-        self.update_timer.start(50)  # Update every 50ms
+            self.update_timer.timeout.connect(self.update_gui)
+            self.update_timer.start(50)  # Update every 50ms
+        except Exception as e:
+            import traceback
+            print(f"Warning: Failed to start update timer: {e}", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
 
         # Check for MIDI devices and show warning if needed (after window is shown)
         QTimer.singleShot(500, self.check_midi_devices_on_startup)
@@ -1188,55 +1192,76 @@ class MIDIMonitor(QMainWindow):
         self.midi_thread.start()
 
     def check_midi_devices_on_startup(self):
-        """Check for MIDI devices on startup and show informational dialog if none found"""
+        """Check for MIDI devices on startup and show informational dialog if none found or connection failed"""
         # Only show warning if user hasn't disabled it
         if not self.show_no_midi_warning:
             return
 
-        mido, _ = check_dependencies()
-        input_ports = mido.get_input_names()
+        # Check if MIDI is actually connected
+        if self.inport is not None:
+            # MIDI is connected, no need to show warning
+            return
 
-        if not input_ports:
-            # No MIDI devices found - show friendly notification
-            dialog = QDialog(self)
-            dialog.setWindowTitle("No MIDI Devices Found")
-            dialog.setMinimumWidth(450)
-
-            layout = QVBoxLayout()
-            dialog.setLayout(layout)
-
-            # Message
-            message = QLabel(
-                "No midi devices found. You can still use the piano to find chords "
+        # MIDI is not connected - show friendly notification
+        try:
+            mido, _ = check_dependencies()
+            input_ports = mido.get_input_names()
+            
+            if not input_ports:
+                message_text = (
+                    "No MIDI devices found. You can still use the piano to find chords "
+                    "by enabling Key Toggle in the right-click menu."
+                )
+            else:
+                # MIDI devices exist but connection failed
+                message_text = (
+                    "MIDI connection failed. You can still use the piano to find chords "
+                    "by enabling Key Toggle in the right-click menu."
+                )
+        except Exception:
+            # If we can't even check for MIDI devices, just show generic message
+            message_text = (
+                "MIDI is not available. You can still use the piano to find chords "
                 "by enabling Key Toggle in the right-click menu."
             )
-            message.setWordWrap(True)
-            layout.addWidget(message)
 
-            layout.addSpacing(10)
+        # Show friendly notification dialog
+        dialog = QDialog(self)
+        dialog.setWindowTitle("MIDI Not Available")
+        dialog.setMinimumWidth(450)
 
-            # "Don't show again" checkbox
-            dont_show_checkbox = QCheckBox("Don't show again")
-            layout.addWidget(dont_show_checkbox)
+        layout = QVBoxLayout()
+        dialog.setLayout(layout)
 
-            # Ok button
-            button_layout = QHBoxLayout()
-            ok_button = QPushButton("Ok")
-            ok_button.setDefault(True)
+        # Message
+        message = QLabel(message_text)
+        message.setWordWrap(True)
+        layout.addWidget(message)
 
-            def on_ok():
-                if dont_show_checkbox.isChecked():
-                    self.show_no_midi_warning = False
-                    self.save_settings()
-                dialog.accept()
+        layout.addSpacing(10)
 
-            ok_button.clicked.connect(on_ok)
-            button_layout.addStretch()
-            button_layout.addWidget(ok_button)
-            button_layout.addStretch()
-            layout.addLayout(button_layout)
+        # "Don't show again" checkbox
+        dont_show_checkbox = QCheckBox("Don't show again")
+        layout.addWidget(dont_show_checkbox)
 
-            dialog.exec_()
+        # Ok button
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("Ok")
+        ok_button.setDefault(True)
+
+        def on_ok():
+            if dont_show_checkbox.isChecked():
+                self.show_no_midi_warning = False
+                self.save_settings()
+            dialog.accept()
+
+        ok_button.clicked.connect(on_ok)
+        button_layout.addStretch()
+        button_layout.addWidget(ok_button)
+        button_layout.addStretch()
+        layout.addLayout(button_layout)
+
+        dialog.exec_()
 
     def midi_input_thread(self):
         """Thread to continuously read MIDI messages"""
