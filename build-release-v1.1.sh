@@ -180,11 +180,21 @@ cat > "${DEB_BUILD_DIR}/usr/share/metainfo/ivory.metainfo.xml" << EOF
 EOF
 
 # Build .deb (use --root-owner-group for GitHub Actions compatibility)
-# Suppress warnings but fail on actual errors
-if ! dpkg-deb --build --root-owner-group "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" 2>&1 | grep -v "warning:" | grep -v "hint:"; then
-    # If that failed, try without the flag (warnings are OK)
-    dpkg-deb --build "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" 2>&1 | grep -v "warning:" | grep -v "hint:" || true
-    # Check if file was actually created despite warnings
+# Try with flag first, suppress warnings to stderr
+if dpkg-deb --build --root-owner-group "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" 2>&1 | grep -vE "(warning|hint):" > /dev/null 2>&1 || [ ${PIPESTATUS[0]} -eq 0 ]; then
+    # Check if file was created (warnings are OK, but file must exist)
+    if [ ! -f "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" ]; then
+        echo "ERROR: .deb file was not created with --root-owner-group"
+        # Try without the flag
+        dpkg-deb --build "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" 2>&1 | grep -vE "(warning|hint):" || true
+        if [ ! -f "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" ]; then
+            echo "ERROR: .deb file was not created"
+            exit 1
+        fi
+    fi
+else
+    # Try without the flag
+    dpkg-deb --build "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" 2>&1 | grep -vE "(warning|hint):" || true
     if [ ! -f "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" ]; then
         echo "ERROR: .deb file was not created"
         exit 1
