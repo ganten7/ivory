@@ -25,6 +25,9 @@ jobs:
               mkdir -p build-deb/usr/share/icons/hicolor/128x128/apps
               mkdir -p build-deb/usr/share/doc/ivory
               
+              # Extract version from tag
+              VERSION=${GITHUB_REF#refs/tags/v}
+              
               # Copy files
               cp ivory_v2.py build-deb/usr/bin/ivory
               cp chord_detector_v2.py build-deb/usr/bin/
@@ -76,6 +79,7 @@ jobs:
           - os: windows-latest
             platform: windows
             build_command: |
+              VERSION=${GITHUB_REF#refs/tags/v}
               pip install -r build_scripts/requirements.txt
               cd build_scripts
               pyinstaller build_windows.spec
@@ -86,6 +90,7 @@ jobs:
           - os: macos-latest
             platform: macos
             build_command: |
+              VERSION=${GITHUB_REF#refs/tags/v}
               pip install -r build_scripts/requirements.txt
               cd build_scripts
               pyinstaller build_macos.spec
@@ -109,14 +114,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r build_scripts/requirements.txt
 
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-
       - name: Build for ${{ matrix.platform }}
         run: ${{ matrix.build_command }}
-        env:
-          VERSION: ${{ steps.get_version.outputs.VERSION }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
