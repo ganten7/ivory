@@ -2181,36 +2181,6 @@ def main():
         # This is acceptable behavior for Windows users
         pass
 
-    # Set Qt plugin path for macOS PyInstaller bundles (must be before QApplication)
-    if getattr(sys, 'frozen', False) and sys.platform == 'darwin':
-        try:
-            # PyInstaller creates a temp folder and stores path in _MEIPASS
-            bundle_dir = sys._MEIPASS
-            # Try different possible plugin paths
-            plugin_paths = [
-                os.path.join(bundle_dir, 'PyQt5', 'Qt5', 'plugins'),
-                os.path.join(bundle_dir, 'PyQt5', 'Qt', 'plugins'),
-                os.path.join(bundle_dir, 'platforms'),
-            ]
-            plugin_found = False
-            for plugin_path in plugin_paths:
-                if os.path.exists(plugin_path):
-                    os.environ['QT_PLUGIN_PATH'] = plugin_path
-                    print(f"Set QT_PLUGIN_PATH to: {plugin_path}", file=sys.stderr)
-                    plugin_found = True
-                    break
-            if not plugin_found:
-                print(f"WARNING: Qt plugin path not found! Tried: {plugin_paths}", file=sys.stderr)
-                print(f"Contents of bundle_dir ({bundle_dir}):", file=sys.stderr)
-                try:
-                    for item in os.listdir(bundle_dir):
-                        print(f"  {item}", file=sys.stderr)
-                except:
-                    pass
-        except Exception as e:
-            print(f"ERROR: Could not set QT_PLUGIN_PATH: {e}", file=sys.stderr)
-            import traceback
-            traceback.print_exc(file=sys.stderr)
     
     # Create application (removed single-instance check - it was causing issues)
     app = QApplication(sys.argv)
