@@ -1,8 +1,25 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
+
+# Find PyQt5 plugins directory (platforms plugin needed for macOS)
+pyqt5_plugins = None
+try:
+    import PyQt5
+    pyqt5_path = os.path.dirname(PyQt5.__file__)
+    plugins_path = os.path.join(pyqt5_path, 'Qt5', 'plugins', 'platforms')
+    if os.path.exists(plugins_path):
+        pyqt5_plugins = (plugins_path, 'PyQt5/Qt5/plugins')
+    else:
+        # Try alternative path
+        plugins_path = os.path.join(pyqt5_path, 'Qt', 'plugins', 'platforms')
+        if os.path.exists(plugins_path):
+            pyqt5_plugins = (plugins_path, 'PyQt5/Qt/plugins')
+except:
+    pass
 
 a = Analysis(
     ['../ivory_v2.py'],
@@ -11,7 +28,7 @@ a = Analysis(
     datas=[
         ('../chord_detector_v2.py', '.'),
         ('../screenshots', 'screenshots'),
-    ] + ([('../icons', 'icons')] if os.path.exists('../icons') else []) + collect_data_files('PyQt5'),  # Include icons directory if it exists, and PyQt5 plugins/data files
+    ] + ([('../icons', 'icons')] if os.path.exists('../icons') else []) + ([pyqt5_plugins] if pyqt5_plugins else []),  # Include icons directory if it exists, and PyQt5 platforms plugin
     hiddenimports=[
         'chord_detector_v2',  # Explicit import for chord detector module
         'mido',
