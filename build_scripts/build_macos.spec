@@ -10,9 +10,8 @@ a = Analysis(
     binaries=[],
     datas=[
         ('../chord_detector_v2.py', '.'),
-        ('../icons', 'icons'),  # Include icons directory for resource_path()
         ('../screenshots', 'screenshots'),
-    ],
+    ] + ([('../icons', 'icons')] if os.path.exists('../icons') else []),  # Include icons directory if it exists
     hiddenimports=[
         'chord_detector_v2',  # Explicit import for chord detector module
         'mido',
