@@ -92,5 +92,10 @@ app = BUNDLE(
         'CFBundleVersion': '1.0.1',
         'CFBundleShortVersionString': '1.0.1',
         'NSHighResolutionCapable': 'True',
+        'LSMinimumSystemVersion': '10.13',
+        'LSApplicationCategoryType': 'public.app-category.music',
+        'NSHumanReadableCopyright': 'Copyright © 2025',
+        'CFBundlePackageType': 'APPL',
+        'CFBundleExecutable': 'Ivory',
     },
 )
