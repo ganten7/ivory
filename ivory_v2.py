@@ -1119,9 +1119,16 @@ class MIDIMonitor(QMainWindow):
             self.inport = mido.open_input(port)
             self.actual_port_name = port
         except Exception as e:
-            QMessageBox.critical(self, "MIDI Error", 
-                                f"Error opening MIDI port:\n{e}")
-            sys.exit(1)
+            # Don't crash - show error and continue without MIDI
+            error_msg = f"Error opening MIDI port '{port}':\n{e}\n\nIvory will continue without MIDI input.\nYou can click on the piano keys to test."
+            print(f"MIDI Error: {error_msg}", file=sys.stderr)
+            try:
+                QMessageBox.warning(self, "MIDI Error", error_msg)
+            except:
+                # If QMessageBox fails, at least print to console
+                print(f"Could not show error dialog: {error_msg}", file=sys.stderr)
+            # Don't exit - allow app to run without MIDI
+            return
         
         # Start MIDI input thread
         self.midi_thread_running = True
