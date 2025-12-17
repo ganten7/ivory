@@ -59,11 +59,20 @@ def check_dependencies():
     try:
         import mido
         from mido import Message
-    except ImportError:
-        print("Error: mido library not found. Install it with:")
-        print("  pip install mido python-rtmidi")
+    except ImportError as e:
+        error_msg = f"Error: mido library not found.\n\n{e}\n\nInstall it with:\n  pip install mido python-rtmidi"
+        print(error_msg, file=sys.stderr)
+        # Try to show error dialog if PyQt5 is available
+        try:
+            if PYQT5_AVAILABLE:
+                from PyQt5.QtWidgets import QApplication, QMessageBox
+                if not QApplication.instance():
+                    error_app = QApplication(sys.argv)
+                QMessageBox.critical(None, "Ivory Error", error_msg)
+        except:
+            pass
         sys.exit(1)
-
+    
     return mido, Message
 
 # Import mido only when needed
