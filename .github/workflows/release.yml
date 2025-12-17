@@ -84,7 +84,7 @@ jobs:
               pyinstaller build_windows.spec
               cd ..
               mkdir -p dist
-              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
+              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v$VERSION.exe
 
           - os: macos-latest
             platform: macos
@@ -95,7 +95,7 @@ jobs:
               cd ..
               mkdir -p dist
               cd build_scripts/dist
-              zip -r ../../dist/Ivory-macOS-v${VERSION}.zip Ivory.app
+              zip -r ../../dist/Ivory-macOS-v$VERSION.zip Ivory.app
               cd ../..
 
     steps:
