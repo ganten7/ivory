@@ -11,7 +11,7 @@ a = Analysis(
     datas=[
         ('../chord_detector_v2.py', '.'),
         ('../screenshots', 'screenshots'),
-    ] + ([('../icons', 'icons')] if os.path.exists('../icons') else []),  # Include icons directory if it exists
+    ] + ([('../icons', 'icons')] if os.path.exists('../icons') else []) + collect_data_files('PyQt5'),  # Include icons directory if it exists, and PyQt5 plugins/data files
     hiddenimports=[
         'chord_detector_v2',  # Explicit import for chord detector module
         'mido',
