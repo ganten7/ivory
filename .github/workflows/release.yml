@@ -79,21 +79,50 @@ jobs:
               pip install -r build_scripts/requirements.txt
               cd build_scripts
               pyinstaller build_windows.spec
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "PyInstaller failed!"
+                if (Test-Path "build/build_windows/warn-build_windows.txt") {
+                  Write-Host "=== Warnings ==="
+                  Get-Content build/build_windows/warn-build_windows.txt
+                }
+                exit 1
+              }
               cd ..
-              mkdir -p dist
-              mv build_scripts/dist/Ivory.exe dist/Ivory-Windows-v${VERSION}.exe
+              New-Item -ItemType Directory -Force -Path dist | Out-Null
+              if (Test-Path "build_scripts/dist/Ivory.exe") {
+                Move-Item -Force build_scripts/dist/Ivory.exe "dist/Ivory-Windows-v$env:VERSION.exe"
+              } else {
+                Write-Host "ERROR: Ivory.exe not found in build_scripts/dist/"
+                Write-Host "Contents of build_scripts/dist/:"
+                Get-ChildItem build_scripts/dist/ | Select-Object Name
+                exit 1
+              }
 
           - os: macos-latest
             platform: macos
             build_command: |
               pip install -r build_scripts/requirements.txt
               cd build_scripts
-              pyinstaller build_macos.spec
+              pyinstaller build_macos.spec || {
+                echo "PyInstaller failed!"
+                if [ -f "build/Ivory/warn-Ivory.txt" ]; then
+                  echo "=== Warnings ==="
+                  cat build/Ivory/warn-Ivory.txt
+                fi
+                exit 1
+              }
               cd ..
               mkdir -p dist
-              cd build_scripts/dist
-              zip -r ../../dist/Ivory-macOS-v${VERSION}.zip Ivory.app
-              cd ../..
+              if [ -d "build_scripts/dist/Ivory.app" ]; then
+                cd build_scripts/dist
+                zip -r ../../dist/Ivory-macOS-v${VERSION}.zip Ivory.app
+                cd ../..
+              else
+                echo "ERROR: Ivory.app not found in build_scripts/dist/"
+                echo "Contents of build_scripts/dist/:"
+                ls -la build_scripts/dist/
+                exit 1
+              fi
 
     steps:
       - name: Checkout code
@@ -115,7 +144,7 @@ jobs:
 
       - name: Build for ${{ matrix.platform }}
         run: ${{ matrix.build_command }}
-        shell: bash
+        shell: ${{ matrix.platform == 'windows' && 'pwsh' || 'bash' }}
         env:
           VERSION: ${{ steps.get_version.outputs.VERSION }}
 
