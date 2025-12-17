@@ -26,6 +26,48 @@ def resource_path(relative_path):
         base_path = os.path.abspath(os.path.dirname(__file__))
     return os.path.join(base_path, relative_path)
 
+def write_crash_log(error_msg, traceback_str):
+    """Write crash log to desktop"""
+    try:
+        from pathlib import Path
+        
+        # Get desktop path based on OS
+        if sys.platform == "win32":
+            desktop = Path(os.getenv('USERPROFILE', '')) / 'Desktop'
+        elif sys.platform == "darwin":
+            desktop = Path.home() / 'Desktop'
+        else:
+            desktop = Path.home() / 'Desktop'
+        
+        # Fallback to home directory if Desktop doesn't exist
+        if not desktop.exists():
+            desktop = Path.home()
+        
+        crash_log = desktop / f"Ivory_Crash_Log_{time.strftime('%Y%m%d_%H%M%S')}.txt"
+        
+        with open(crash_log, 'w', encoding='utf-8') as f:
+            f.write("=" * 80 + "\n")
+            f.write("IVORY CRASH LOG\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Version: {__version__}\n")
+            f.write(f"Platform: {sys.platform}\n")
+            f.write(f"Python: {sys.version}\n\n")
+            f.write("=" * 80 + "\n")
+            f.write("ERROR MESSAGE\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(error_msg + "\n\n")
+            f.write("=" * 80 + "\n")
+            f.write("FULL TRACEBACK\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(traceback_str + "\n")
+        
+        return str(crash_log)
+    except Exception as e:
+        # If we can't write the log, at least try to print it
+        print(f"Failed to write crash log: {e}", file=sys.stderr)
+        return None
+
 # Import chord detector (enhanced version with improvements)
 try:
     from chord_detector_v2 import ChordDetector
@@ -669,16 +711,28 @@ class MIDIMonitor(QMainWindow):
         if hasattr(self, 'piano_widget') and hasattr(self, '_click_enabled'):
             self.piano_widget.click_enabled = self._click_enabled
         
-        # Connect MIDI
-        self.connect_midi()
+        # Connect MIDI (with error handling)
+        try:
+            self.connect_midi()
+        except Exception as e:
+            import traceback
+            print(f"Warning: MIDI connection failed: {e}", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
+            # Continue without MIDI - app can still work with click-to-toggle
         
-        # Start update timers
-        if CHORD_DETECTOR_AVAILABLE and self.chord_detector:
-            self.chord_timer = QTimer()
-            self.chord_timer.timeout.connect(self.update_chord_detection)
-            self.chord_timer.start(100)  # Update every 100ms
+        # Start update timers (with error handling)
+        try:
+            if CHORD_DETECTOR_AVAILABLE and self.chord_detector:
+                self.chord_timer = QTimer()
+                self.chord_timer.timeout.connect(self.update_chord_detection)
+                self.chord_timer.start(100)  # Update every 100ms
+        except Exception as e:
+            import traceback
+            print(f"Warning: Failed to start chord timer: {e}", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
         
-        self.update_timer = QTimer()
+        try:
+            self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.update_gui)
         self.update_timer.start(50)  # Update every 50ms
 
@@ -2124,17 +2178,65 @@ def main():
     if icon_path and os.path.exists(icon_path):
         app.setWindowIcon(QIcon(str(icon_path)))
     
-    # Create and show main window
-    monitor = MIDIMonitor(port_name=args.port)
-    # Set window title
-    monitor.setWindowTitle("Ivory")
-    monitor.show()
-    # Force window to be raised and activated
-    monitor.raise_()
-    monitor.activateWindow()
+    # Create and show main window with error handling
+    try:
+        monitor = MIDIMonitor(port_name=args.port)
+        # Set window title
+        monitor.setWindowTitle("Ivory")
+        monitor.show()
+        # Force window to be raised and activated
+        monitor.raise_()
+        monitor.activateWindow()
+    except Exception as e:
+        import traceback
+        tb_str = traceback.format_exc()
+        error_msg = f"Error creating main window:\n\n{str(e)}\n\n{tb_str}"
+        print(error_msg, file=sys.stderr)
+        
+        # Write crash log
+        crash_log_path = write_crash_log(str(e), tb_str)
+        
+        # Try to show error dialog
+        try:
+            if PYQT5_AVAILABLE:
+                from PyQt5.QtWidgets import QMessageBox
+                dialog_msg = f"Error creating main window:\n\n{str(e)}\n\n"
+                if crash_log_path:
+                    dialog_msg += f"Crash log saved to:\n{crash_log_path}"
+                QMessageBox.critical(None, "Ivory Error", dialog_msg)
+        except:
+            pass
+        
+        if crash_log_path:
+            print(f"\nCrash log saved to: {crash_log_path}", file=sys.stderr)
+        sys.exit(1)
     
-    # Run event loop
-    exit_code = app.exec_()
+    # Run event loop with error handling
+    try:
+        exit_code = app.exec_()
+    except Exception as e:
+        import traceback
+        tb_str = traceback.format_exc()
+        error_msg = f"Error in event loop:\n\n{str(e)}\n\n{tb_str}"
+        print(error_msg, file=sys.stderr)
+        
+        # Write crash log
+        crash_log_path = write_crash_log(str(e), tb_str)
+        
+        # Try to show error dialog
+        try:
+            if PYQT5_AVAILABLE:
+                from PyQt5.QtWidgets import QMessageBox
+                dialog_msg = f"Error in event loop:\n\n{str(e)}\n\n"
+                if crash_log_path:
+                    dialog_msg += f"Crash log saved to:\n{crash_log_path}"
+                QMessageBox.critical(None, "Ivory Error", dialog_msg)
+        except:
+            pass
+        
+        if crash_log_path:
+            print(f"\nCrash log saved to: {crash_log_path}", file=sys.stderr)
+        sys.exit(1)
 
     sys.exit(exit_code)
 
