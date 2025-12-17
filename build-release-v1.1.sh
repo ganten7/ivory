@@ -179,8 +179,12 @@ cat > "${DEB_BUILD_DIR}/usr/share/metainfo/ivory.metainfo.xml" << EOF
 </component>
 EOF
 
-# Build .deb
-dpkg-deb --build "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb"
+# Build .deb (use --root-owner-group for GitHub Actions compatibility)
+dpkg-deb --build --root-owner-group "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb" || {
+    echo "ERROR: dpkg-deb failed"
+    echo "Trying without --root-owner-group..."
+    dpkg-deb --build "${DEB_BUILD_DIR}" "${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb"
+}
 
 echo "✓ Linux .deb built: ${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb"
 echo ""
