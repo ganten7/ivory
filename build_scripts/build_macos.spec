@@ -31,8 +31,10 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='Ivory',
     debug=False,
     bootloader_ignore_signals=False,
@@ -46,27 +48,18 @@ exe = EXE(
     entitlements_file=None,
 )
 
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=False,  # Disable UPX compression
-    upx_exclude=[],
-    name='Ivory',
-)
-
 app = BUNDLE(
-    coll,
+    exe,
     name='Ivory.app',
     icon='../screenshots/icon.icns' if os.path.exists('../screenshots/icon.icns') else None,
     bundle_identifier='com.ivory.midikeyboard',
     info_plist={
         'CFBundleName': 'Ivory',
         'CFBundleDisplayName': 'Ivory',
-        'CFBundleVersion': '1.0.1',
-        'CFBundleShortVersionString': '1.0.1',
+        'CFBundleVersion': '1.0.0',
+        'CFBundleShortVersionString': '1.0.0',
         'NSHighResolutionCapable': 'True',
+        'CFBundlePackageType': 'APPL',
+        'LSMinimumSystemVersion': '10.12',
     },
 )
