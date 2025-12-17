@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build Ivory for all platforms: Linux (.deb), Windows (.exe), macOS (.zip)
 # Version can be set via VERSION environment variable, defaults to 1.1
+# Set BUILD_PLATFORM environment variable to "linux", "windows", "macos", or "all" (default: "all")
 
 set -e
 
@@ -185,55 +186,74 @@ echo "✓ Linux .deb built: ${RELEASE_DIR}/ivory-linux/ivory_${VERSION}_all.deb"
 echo ""
 
 # ============================================
-# 2. BUILD WINDOWS .exe PACKAGE
+# 2. BUILD WINDOWS .exe PACKAGE (optional)
 # ============================================
-echo "=========================================="
-echo "2. Building Windows .exe package..."
-echo "=========================================="
+BUILD_PLATFORM="${BUILD_PLATFORM:-all}"
+if [ "$BUILD_PLATFORM" = "all" ] || [ "$BUILD_PLATFORM" = "windows" ]; then
+    echo "=========================================="
+    echo "2. Building Windows .exe package..."
+    echo "=========================================="
 
-if command -v pyinstaller >/dev/null 2>&1; then
-    cd build_scripts
-    pyinstaller --clean build_windows.spec
-    cd ..
-    
-    if [ -f "build_scripts/dist/Ivory/Ivory.exe" ]; then
-        cp "build_scripts/dist/Ivory/Ivory.exe" "${RELEASE_DIR}/ivory-windows/Ivory-Windows-v${VERSION}.exe"
-        echo "✓ Windows .exe built: ${RELEASE_DIR}/ivory-windows/Ivory-Windows-v${VERSION}.exe"
+    if command -v pyinstaller >/dev/null 2>&1; then
+        cd build_scripts
+        pyinstaller --clean build_windows.spec || {
+            echo "⚠ Windows build failed - continuing..."
+            cd ..
+        }
+        cd ..
+        
+        if [ -f "build_scripts/dist/Ivory.exe" ]; then
+            cp "build_scripts/dist/Ivory.exe" "${RELEASE_DIR}/ivory-windows/Ivory-Windows-v${VERSION}.exe"
+            echo "✓ Windows .exe built: ${RELEASE_DIR}/ivory-windows/Ivory-Windows-v${VERSION}.exe"
+        elif [ -f "build_scripts/dist/Ivory/Ivory.exe" ]; then
+            cp "build_scripts/dist/Ivory/Ivory.exe" "${RELEASE_DIR}/ivory-windows/Ivory-Windows-v${VERSION}.exe"
+            echo "✓ Windows .exe built: ${RELEASE_DIR}/ivory-windows/Ivory-Windows-v${VERSION}.exe"
+        else
+            echo "⚠ Windows build failed - pyinstaller output may have errors"
+        fi
     else
-        echo "⚠ Windows build failed - pyinstaller output may have errors"
+        echo "⚠ pyinstaller not found - skipping Windows build"
+        echo "  Install with: pip install pyinstaller"
     fi
-else
-    echo "⚠ pyinstaller not found - skipping Windows build"
-    echo "  Install with: pip install pyinstaller"
+    echo ""
 fi
-echo ""
 
 # ============================================
-# 3. BUILD macOS .zip PACKAGE
+# 3. BUILD macOS .zip PACKAGE (optional)
 # ============================================
-echo "=========================================="
-echo "3. Building macOS .zip package..."
-echo "=========================================="
+if [ "$BUILD_PLATFORM" = "all" ] || [ "$BUILD_PLATFORM" = "macos" ]; then
+    echo "=========================================="
+    echo "3. Building macOS .zip package..."
+    echo "=========================================="
 
-if command -v pyinstaller >/dev/null 2>&1; then
-    cd build_scripts
-    pyinstaller --clean build_macos.spec
-    cd ..
-    
-    if [ -d "build_scripts/dist/Ivory.app" ]; then
-        cd build_scripts/dist
-        zip -r "../../${RELEASE_DIR}/ivory-macos/Ivory-macOS-v${VERSION}.zip" Ivory.app >/dev/null 2>&1
-        cd ../..
-        echo "✓ macOS .zip built: ${RELEASE_DIR}/ivory-macos/Ivory-macOS-v${VERSION}.zip"
+    if command -v pyinstaller >/dev/null 2>&1; then
+        cd build_scripts
+        pyinstaller --clean build_macos.spec || {
+            echo "⚠ macOS build failed - continuing..."
+            cd ..
+        }
+        cd ..
+        
+        if [ -d "build_scripts/dist/Ivory.app" ]; then
+            cd build_scripts/dist
+            zip -r "../../${RELEASE_DIR}/ivory-macos/Ivory-macOS-v${VERSION}.zip" Ivory.app >/dev/null 2>&1 || {
+                echo "⚠ ZIP creation failed"
+                cd ../..
+            }
+            cd ../..
+            if [ -f "${RELEASE_DIR}/ivory-macos/Ivory-macOS-v${VERSION}.zip" ]; then
+                echo "✓ macOS .zip built: ${RELEASE_DIR}/ivory-macos/Ivory-macOS-v${VERSION}.zip"
+            fi
+        else
+            echo "⚠ macOS build failed - checking dist directory..."
+            ls -la build_scripts/dist/ 2>/dev/null || true
+        fi
     else
-        echo "⚠ macOS build failed - checking dist directory..."
-        ls -la build_scripts/dist/ 2>/dev/null || true
+        echo "⚠ pyinstaller not found - skipping macOS build"
+        echo "  Install with: pip install pyinstaller"
     fi
-else
-    echo "⚠ pyinstaller not found - skipping macOS build"
-    echo "  Install with: pip install pyinstaller"
+    echo ""
 fi
-echo ""
 
 # ============================================
 # SUMMARY

@@ -18,12 +18,66 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             build_command: |
+              set -e  # Exit on error
               echo "Building Linux .deb for version $VERSION"
+              
               # Install dpkg-deb if needed
-              sudo apt-get update && sudo apt-get install -y dpkg-dev
-              VERSION=$VERSION bash build-release-v1.1.sh
+              echo "Installing dependencies..."
+              sudo apt-get update && sudo apt-get install -y dpkg-dev || {
+                echo "ERROR: Failed to install dpkg-dev"
+                exit 1
+              }
+              
+              # Verify source files exist
+              echo "Checking source files..."
+              if [ ! -f "ivory_v2.py" ]; then
+                echo "ERROR: ivory_v2.py not found"
+                ls -la *.py | head -10
+                exit 1
+              fi
+              if [ ! -f "chord_detector_v2.py" ]; then
+                echo "ERROR: chord_detector_v2.py not found"
+                ls -la *.py | head -10
+                exit 1
+              fi
+              echo "✓ Source files found"
+              
+              # Check if build script exists
+              if [ ! -f "build-release-v1.1.sh" ]; then
+                echo "ERROR: build-release-v1.1.sh not found"
+                ls -la *.sh | head -10
+                exit 1
+              fi
+              
+              # Make script executable
+              chmod +x build-release-v1.1.sh
+              
+              # Run build script with error handling
+              echo "Running build script..."
+              VERSION=$VERSION bash build-release-v1.1.sh || {
+                echo "Build script failed with exit code $?"
+                echo "Checking for partial build artifacts..."
+                ls -la release-artifacts/ivory-linux/ 2>/dev/null || echo "No artifacts found"
+                echo "Checking build directory..."
+                ls -la build-release-v1.1/ 2>/dev/null || echo "Build directory not found"
+                exit 1
+              }
+              
+              # Verify .deb was created
+              if [ ! -f "release-artifacts/ivory-linux/ivory_${VERSION}_all.deb" ]; then
+                echo "ERROR: .deb file not found after build"
+                echo "Expected: release-artifacts/ivory-linux/ivory_${VERSION}_all.deb"
+                echo "Contents of release-artifacts/ivory-linux/:"
+                ls -la release-artifacts/ivory-linux/ 2>/dev/null || echo "Directory does not exist"
+                echo "Contents of release-artifacts/:"
+                ls -la release-artifacts/ 2>/dev/null || echo "Directory does not exist"
+                exit 1
+              fi
+              
+              echo "✓ .deb file found: release-artifacts/ivory-linux/ivory_${VERSION}_all.deb"
               mkdir -p dist
               cp release-artifacts/ivory-linux/ivory_${VERSION}_all.deb dist/
+              echo "✓ Linux .deb copied to dist/"
 
           - os: windows-latest
             platform: windows
