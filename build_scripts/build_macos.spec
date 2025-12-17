@@ -24,7 +24,11 @@ a = Analysis(
         'PyQt5.sip',
     ] + collect_submodules('mido') + collect_submodules('rtmidi'),  # Collect all mido/rtmidi submodules
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={
+        'PyQt5': {
+            'collect_all': True,  # Collect all PyQt5 data files including plugins
+        },
+    },
     runtime_hooks=[],
     excludes=[
         'tkinter',
