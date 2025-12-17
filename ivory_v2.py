@@ -85,7 +85,7 @@ try:
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                   QMenu, QMessageBox, QDialog, QLabel, QListWidget,
                                   QDialogButtonBox, QColorDialog, QLineEdit, QPushButton,
-                                  QHBoxLayout, QFrame, QSizePolicy, QTextBrowser)
+                                  QHBoxLayout, QFrame, QSizePolicy, QTextBrowser, QCheckBox)
     from PyQt5.QtCore import Qt, QTimer, QPoint, QSize, pyqtSignal, QSharedMemory, QSystemSemaphore, QEvent
     from PyQt5.QtGui import QPainter, QColor, QFont, QFontMetrics, QPen, QBrush, QIcon, QMouseEvent, QContextMenuEvent
     PYQT5_AVAILABLE = True
@@ -711,13 +711,14 @@ class MIDIMonitor(QMainWindow):
         if hasattr(self, 'piano_widget') and hasattr(self, '_click_enabled'):
             self.piano_widget.click_enabled = self._click_enabled
         
-        # Connect MIDI (with error handling)
+        # Connect MIDI (with error handling - don't crash if it fails)
         try:
             self.connect_midi()
         except Exception as e:
+            # Silently handle MIDI connection errors - app works without MIDI
             import traceback
-            print(f"Warning: MIDI connection failed: {e}", file=sys.stderr)
-            print(traceback.format_exc(), file=sys.stderr)
+            print(f"MIDI connection failed: {e}", file=sys.stderr)
+            print("App will continue without MIDI input.", file=sys.stderr)
             # Continue without MIDI - app can still work with click-to-toggle
         
         # Start update timers (with error handling)
@@ -1173,14 +1174,11 @@ class MIDIMonitor(QMainWindow):
             self.inport = mido.open_input(port)
             self.actual_port_name = port
         except Exception as e:
-            # Don't crash - show error and continue without MIDI
-            error_msg = f"Error opening MIDI port '{port}':\n{e}\n\nIvory will continue without MIDI input.\nYou can click on the piano keys to test."
-            print(f"MIDI Error: {error_msg}", file=sys.stderr)
-            try:
-                QMessageBox.warning(self, "MIDI Error", error_msg)
-            except:
-                # If QMessageBox fails, at least print to console
-                print(f"Could not show error dialog: {error_msg}", file=sys.stderr)
+            # Don't crash - silently fail and continue without MIDI
+            # The check_midi_devices_on_startup will show a friendly message
+            print(f"MIDI Error: Could not open MIDI port '{port}': {e}", file=sys.stderr)
+            print("Ivory will continue without MIDI input. Enable Key Toggle in right-click menu to test.", file=sys.stderr)
+            # Don't show error dialog - let check_midi_devices_on_startup handle it
             # Don't exit - allow app to run without MIDI
             return
         
