@@ -33,6 +33,13 @@
 - App now runs correctly on Windows without AttributeError
 - See [WINDOWS_COMPATIBILITY.md](WINDOWS_COMPATIBILITY.md) for details
 
+#### 🔧 Build System Fixes
+- **Fixed Windows EXE crashes** - Disabled UPX compression that was corrupting PyInstaller's PKG archive
+- **Fixed macOS launch issues** - Improved PyInstaller configuration and dependency handling
+- **Fixed missing module errors** - Added proper handling for mido.backends.rtmidi and all submodules
+- **Improved error handling** - Better build diagnostics and verification
+- See [IVORY-WINDOWS-MAC-FIXES.txt](IVORY-WINDOWS-MAC-FIXES.txt) for complete technical details
+
 ---
 
 ## 📸 Screenshots
